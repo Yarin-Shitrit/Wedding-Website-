@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Side {
+  BRIDE
+  GROOM
+  BOTH
+}
+
+enum RsvpStatus {
+  PENDING
+  ATTENDING
+  DECLINED
+  MAYBE
+}
+
+model Guest {
+  id             String     @id @default(cuid())
+  firstName      String
+  lastName       String
+  phone          String     @unique
+  side           Side       @default(BOTH)
+  relation       String?
+  invitedCount   Int        @default(1)
+  rsvpStatus     RsvpStatus @default(PENDING)
+  attendingCount Int?
+  dietary        String?
+  notes          String?
+  tableId        String?
+  table          Table?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([tableId])
+  @@index([rsvpStatus])
+}
+
+model Table {
+  id       String  @id @default(cuid())
+  label    String  @unique
+  capacity Int     @default(10)
+  x        Float?
+  y        Float?
+  guests   Guest[]
+}
+
+model ContentBlock {
+  key       String   @id
+  valueJson Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

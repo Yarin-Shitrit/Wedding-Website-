@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: theme("colors.ivory");
+  color: theme("colors.ink");
+}
+
+body {
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth focus rings for keyboard users */
+:focus-visible {
+  outline: 2px solid theme("colors.sage.600");
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Accessible tap targets on mobile */
+@media (max-width: 640px) {
+  button,
+  [role="button"],
+  a.btn,
+  input[type="submit"] {
+    min-height: 44px;
+  }
+}
+
+/* Reusable primitives */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl2 px-4 py-2 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-sage-600 text-white hover:bg-sage-700;
+  }
+  .btn-secondary {
+    @apply btn bg-sage-100 text-sage-700 hover:bg-sage-50 border border-sage-100;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink hover:bg-sage-50;
+  }
+  .btn-danger {
+    @apply btn bg-blush-500 text-white hover:bg-blush-700;
+  }
+  .card {
+    @apply bg-white rounded-xl2 shadow-soft p-4 sm:p-6;
+  }
+  .input {
+    @apply w-full rounded-xl2 border border-sage-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-sage-500;
+  }
+  .label {
+    @apply block text-sm font-medium text-ink mb-1;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}
