@@ -61,8 +61,9 @@ firstName,lastName,phone,side,relation,invitedCount
    - `SESSION_SECRET` — 32+ char random string (`openssl rand -base64 32`)
    - `NEXT_PUBLIC_WEDDING_DATE` — ISO date with timezone
    - `NEXT_PUBLIC_BRIDE_NAME` / `NEXT_PUBLIC_GROOM_NAME`
-5. Deploy. The build (`vercel.json`) runs `prisma migrate deploy && next build` so schema changes ship with the release.
-6. First-time seeding on production: from your laptop with `DATABASE_URL` pointing at the hosted DB, run `npm run db:seed` once.
+5. Deploy. The build (`vercel.json`) runs `prisma db push && next build`, so the schema lands automatically on every deploy.
+6. After first deploy, open `/admin/login`, sign in with `ADMIN_PASSWORD`. The dashboard shows a "טעינת נתוני דוגמה" button while the DB is empty — click it once to create 3 sample tables, 6 sample guests, and default content blocks.
+7. Going forward, manage guests via the CSV import and content via the admin editor.
 
 ### CLI alternative
 

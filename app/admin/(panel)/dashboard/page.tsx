@@ -7,12 +7,14 @@ import {
   TableUtilization,
   ResponsesOverTime,
 } from "@/components/admin/MetricsCharts";
+import { SeedButton } from "@/components/admin/SeedButton";
 import { he } from "@/messages/he";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const m = await computeMetrics();
+  const empty = m.totals.invited === 0 && m.tableUtilization.length === 0;
   const responseRate =
     m.totals.invited > 0
       ? Math.round(
@@ -30,6 +32,8 @@ export default async function DashboardPage() {
           לניהול מוזמנים
         </Link>
       </header>
+
+      {empty && <SeedButton />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Metric label={he.admin.metrics.invited} value={m.totals.invited} hint={`${m.totals.invitedHeads} מקומות`} />
