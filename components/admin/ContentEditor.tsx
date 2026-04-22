@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { he } from "@/messages/he";
+import { ImageUploader } from "./ImageUploader";
 
-type Field = { key: string; label: string; type: "text" | "textarea" | "url" };
+type Field = {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "url" | "image";
+};
 
 const SCHEMAS: Record<string, { title: string; fields: Field[] }> = {
   hero: {
@@ -11,7 +16,7 @@ const SCHEMAS: Record<string, { title: string; fields: Field[] }> = {
     fields: [
       { key: "title", label: "כותרת", type: "text" },
       { key: "subtitle", label: "כותרת משנה", type: "text" },
-      { key: "heroImageUrl", label: "כתובת תמונה (אופציונלי)", type: "url" },
+      { key: "heroImageUrl", label: "תמונת כותרת של בני הזוג", type: "image" },
     ],
   },
   story: {
@@ -92,6 +97,26 @@ export function ContentEditor({
                 value={value[f.key]}
                 onChange={(e) => setValue({ ...value, [f.key]: e.target.value })}
               />
+            ) : f.type === "image" ? (
+              <div className="max-w-sm">
+                <ImageUploader
+                  value={value[f.key] || null}
+                  onChange={(dataUrl) =>
+                    setValue({ ...value, [f.key]: dataUrl })
+                  }
+                  shape="portrait"
+                  label="בחרו תמונה"
+                />
+                {value[f.key] && (
+                  <button
+                    type="button"
+                    className="mt-2 text-xs text-blush-700 hover:underline"
+                    onClick={() => setValue({ ...value, [f.key]: "" })}
+                  >
+                    הסרת תמונה
+                  </button>
+                )}
+              </div>
             ) : (
               <input
                 className="input"

@@ -65,3 +65,24 @@ model AuditLog {
 
   @@index([createdAt])
 }
+
+model Photo {
+  id        String   @id @default(cuid())
+  dataUrl   String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([sortOrder])
+}
+
+model Station {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  dataUrl     String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([sortOrder])
+}

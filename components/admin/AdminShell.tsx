@@ -8,6 +8,8 @@ import {
   Users,
   Table2,
   FileText,
+  Images,
+  StickyNote,
   LogOut,
   Menu,
   X,
@@ -20,6 +22,8 @@ const items = [
   { href: "/admin/guests", label: he.admin.guests, Icon: Users },
   { href: "/admin/tables", label: he.admin.tables, Icon: Table2 },
   { href: "/admin/content", label: he.admin.content, Icon: FileText },
+  { href: "/admin/gallery", label: he.admin.gallery.nav, Icon: Images },
+  { href: "/admin/stations", label: he.admin.stations.nav, Icon: StickyNote },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
