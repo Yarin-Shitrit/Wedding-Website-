@@ -5,22 +5,47 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { he } from "@/messages/he";
 
-const links = [
-  { href: "#hero", label: he.nav.home },
-  { href: "#story", label: he.nav.story },
-  { href: "#venue", label: he.nav.venue },
-  { href: "#parking", label: he.nav.parking },
-  { href: "/rsvp", label: he.nav.rsvp },
-];
+type Props = {
+  coupleLabel: string;
+  avatar?: string | null;
+  showGallery?: boolean;
+  showStations?: boolean;
+};
 
-export function SectionNav({ coupleLabel }: { coupleLabel: string }) {
+export function SectionNav({
+  coupleLabel,
+  avatar,
+  showGallery,
+  showStations,
+}: Props) {
   const [open, setOpen] = useState(false);
+
+  const links = [
+    { href: "#hero", label: he.nav.home },
+    { href: "#story", label: he.nav.story },
+    ...(showGallery ? [{ href: "#gallery", label: he.nav.gallery }] : []),
+    ...(showStations ? [{ href: "#stations", label: he.nav.stations }] : []),
+    { href: "#venue", label: he.nav.venue },
+    { href: "#parking", label: he.nav.parking },
+    { href: "/rsvp", label: he.nav.rsvp },
+  ];
 
   return (
     <header className="sticky top-0 z-20 bg-ivory/90 backdrop-blur border-b border-sage-100">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <Link href="#hero" className="font-display text-lg sm:text-xl font-semibold">
-          {coupleLabel}
+        <Link
+          href="#hero"
+          className="flex items-center gap-2 font-display text-lg sm:text-xl font-semibold"
+        >
+          {avatar && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatar}
+              alt=""
+              className="w-9 h-9 rounded-full object-cover ring-1 ring-sage-100"
+            />
+          )}
+          <span>{coupleLabel}</span>
         </Link>
         <nav className="hidden md:flex items-center gap-6 text-sm">
           {links.map((l) => (

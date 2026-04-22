@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 import { Countdown } from "@/components/public/Countdown";
 import { Section } from "@/components/public/Section";
 import { VenueMap } from "@/components/public/VenueMap";
+import { Gallery } from "@/components/public/Gallery";
+import { Postcards } from "@/components/public/Postcards";
 import { he } from "@/messages/he";
 
 const bride = process.env.NEXT_PUBLIC_BRIDE_NAME ?? "כלה";
@@ -27,7 +29,15 @@ function formatDate(iso: string) {
 }
 
 export default async function HomePage() {
-  const blocks = await prisma.contentBlock.findMany();
+  const [blocks, photos, stations] = await Promise.all([
+    prisma.contentBlock.findMany(),
+    prisma.photo.findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.station.findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+  ]);
   const content = Object.fromEntries(
     blocks.map((b) => [b.key, b.valueJson as Record<string, unknown>])
   );
@@ -37,11 +47,24 @@ export default async function HomePage() {
   const venue = content.venue ?? {};
   const parking = content.parking ?? {};
   const gift = content.gift ?? {};
+  const heroImage = (hero.heroImageUrl as string) || null;
 
   return (
     <>
       <Section id="hero">
         <div className="text-center">
+          {heroImage && (
+            <div className="mx-auto mb-8 max-w-sm">
+              <div className="relative aspect-[3/4] overflow-hidden rounded-xl2 shadow-soft ring-1 ring-sage-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={heroImage}
+                  alt={`${bride} ו${groom}`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          )}
           <p className="text-sm tracking-[0.3em] text-sage-700 uppercase">
             {(hero.subtitle as string) ?? "ונשמח לחגוג איתכם"}
           </p>
@@ -63,6 +86,37 @@ export default async function HomePage() {
           {(story.body as string) ?? ""}
         </p>
       </Section>
+
+      {photos.length > 0 && (
+        <Section id="gallery" title={he.gallery.title}>
+          <p className="text-center text-sm text-ink/60 -mt-2 mb-6">
+            {he.gallery.subtitle}
+          </p>
+          <Gallery
+            photos={photos.map((p) => ({
+              id: p.id,
+              dataUrl: p.dataUrl,
+              caption: p.caption,
+            }))}
+          />
+        </Section>
+      )}
+
+      {stations.length > 0 && (
+        <Section id="stations" title={he.stations.title}>
+          <p className="text-center text-sm text-ink/60 -mt-2 mb-8">
+            {he.stations.subtitle}
+          </p>
+          <Postcards
+            stations={stations.map((s) => ({
+              id: s.id,
+              title: s.title,
+              description: s.description,
+              dataUrl: s.dataUrl,
+            }))}
+          />
+        </Section>
+      )}
 
       <Section id="venue" title={he.nav.venue}>
         <VenueMap value={venue as any} />

@@ -22,10 +22,22 @@ export const he = {
   nav: {
     home: "ראשי",
     story: "הסיפור שלנו",
+    gallery: "גלריה",
+    stations: "עמדות",
     venue: "המקום",
     parking: "חניה ומידע",
     rsvp: "אישור הגעה",
     admin: "ניהול",
+  },
+  gallery: {
+    title: "הגלריה שלנו",
+    subtitle: "רגעים אהובים",
+    empty: "עדיין לא הוספו תמונות",
+  },
+  stations: {
+    title: "הצצה לרגעים יפים מחיינו",
+    subtitle: "תחנות בדרך אלינו",
+    empty: "עדיין לא הוספו עמדות",
   },
   rsvp: {
     title: "אישור הגעה",
@@ -85,6 +97,33 @@ export const he = {
       DECLINED: "לא מגיע",
       MAYBE: "אולי",
     } as const,
+    gallery: {
+      nav: "גלריה",
+      pageTitle: "ניהול גלריית תמונות",
+      pageHelp:
+        "העלו תמונות של בני הזוג. התמונות יופיעו בעמוד הבית באזור הגלריה.",
+      addTitle: "הוספת תמונה חדשה",
+      pickPhoto: "בחרו תמונה",
+      caption: "כיתוב (אופציונלי)",
+      captionPlaceholder: "למשל: ההצעה בפריז",
+      addCta: "הוספה לגלריה",
+      existing: "תמונות קיימות",
+    },
+    stations: {
+      nav: "עמדות",
+      pageTitle: "ניהול עמדות ופוסטקארדים",
+      pageHelp:
+        "לכל עמדה העלו תמונה, כותרת ותיאור. הכרטיסים יופיעו בעמוד הבית באזור ״הצצה לרגעים יפים מחיינו״.",
+      addTitle: "הוספת עמדה חדשה",
+      pickPhoto: "בחרו תמונה",
+      title: "כותרת",
+      titlePlaceholder: "למשל: ההצעה בפריז",
+      description: "תיאור",
+      descriptionPlaceholder: "ספרו על הרגע, מתי וכיצד קרה…",
+      addCta: "הוספת עמדה",
+      existing: "עמדות קיימות",
+      validation: "נא למלא כותרת, תיאור ותמונה",
+    },
   },
 } as const;
 

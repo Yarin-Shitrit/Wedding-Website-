@@ -63,4 +63,10 @@ body {
   .chip {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
+  .postcard {
+    transition: transform 300ms ease;
+  }
+  .postcard:hover {
+    transform: rotate(0deg) translateY(-4px);
+  }
 }
