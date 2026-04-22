@@ -35,6 +35,7 @@ const STATUS_MAP: Record<string, RsvpStatus> = {
   maybe: "MAYBE",
   "טרם סומן": "PENDING",
   ממתין: "PENDING",
+  "ממתין למענה": "PENDING",
   מגיע: "ATTENDING",
   מגיעה: "ATTENDING",
   מגיעים: "ATTENDING",
@@ -44,16 +45,85 @@ const STATUS_MAP: Record<string, RsvpStatus> = {
   אולי: "MAYBE",
 };
 
-function normHeader(h: string) {
-  return h
+// Role map: identifies the "meaning" of a header cell. We use substring
+// matching (not equality) so slightly off names still work: e.g. a column
+// called "שם המוזמן" still maps to `fullName`, "מספר טלפון" to `phone`.
+type Role =
+  | "index"
+  | "fullName"
+  | "firstName"
+  | "lastName"
+  | "phone"
+  | "side"
+  | "relation"
+  | "invitedCount"
+  | "status"
+  | "ageGroup"
+  | "notes";
+
+const HEADER_HINTS: Array<{ role: Role; needles: string[] }> = [
+  { role: "index", needles: ["#", "מס", "מספר", "no.", "no", "num", "index", "row"] },
+  { role: "firstName", needles: ["first name", "firstname", "שם פרטי"] },
+  { role: "lastName", needles: ["last name", "lastname", "שם משפחה"] },
+  {
+    role: "fullName",
+    needles: [
+      "full name",
+      "fullname",
+      "שם מלא",
+      "שם המוזמן",
+      "שם מוזמן",
+      "שם האורח",
+      "שם האורחים",
+      "name",
+      "שם",
+    ],
+  },
+  {
+    role: "phone",
+    needles: ["phone", "mobile", "cell", "טלפון", "נייד", "פלאפון", "פלא", "מובייל"],
+  },
+  { role: "side", needles: ["side", "צד"] },
+  {
+    role: "relation",
+    needles: ["relation", "group", "קרבה", "קבוצה", "קבוצת", "סוג", "קטגוריה", "שייכות"],
+  },
+  {
+    role: "invitedCount",
+    needles: ["invited", "count", "מוזמנים", "כמות", "מספר מוזמנים"],
+  },
+  { role: "status", needles: ["status", "rsvp", "סטטוס", "הגעה", "מענה"] },
+  { role: "ageGroup", needles: ["age", "גיל", "קבוצת גיל", "בוגר", "צעיר"] },
+  { role: "notes", needles: ["notes", "note", "הערות", "הערה", "תיאור"] },
+];
+
+function normalize(s: string) {
+  return String(s ?? "")
     .trim()
-    .toLowerCase()
     .replace(/﻿/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function classifyHeader(cells: string[]): Record<number, Role> {
+  const map: Record<number, Role> = {};
+  cells.forEach((cell, i) => {
+    const c = normalize(cell);
+    if (!c) return;
+    for (const hint of HEADER_HINTS) {
+      if (hint.needles.some((n) => c.includes(n.toLowerCase()))) {
+        // Don't let a later hint overwrite an earlier, more specific one
+        // for the same column (first match wins).
+        if (!(i in map)) map[i] = hint.role;
+        break;
+      }
+    }
+  });
+  return map;
 }
 
 function splitFullName(full: string): { firstName: string; lastName: string } {
-  const cleaned = full.trim().replace(/\s+/g, " ");
+  const cleaned = String(full ?? "").trim().replace(/\s+/g, " ");
   if (!cleaned) return { firstName: "", lastName: "" };
   const parts = cleaned.split(" ");
   if (parts.length === 1) {
@@ -64,187 +134,168 @@ function splitFullName(full: string): { firstName: string; lastName: string } {
   return { firstName, lastName };
 }
 
-// Heuristic: decide whether the first row is a header or data.
-// Returns true when the first row looks like headers (non-numeric in the
-// first cell, or at least one Hebrew/English known column label present).
-function looksLikeHeader(firstRow: string[]): boolean {
-  if (!firstRow.length) return false;
-  const joined = firstRow.map((c) => c.trim().toLowerCase()).join("|");
-  const knownTokens = [
-    "firstname",
-    "first name",
-    "lastname",
-    "last name",
-    "phone",
-    "שם",
-    "שם פרטי",
-    "שם מלא",
-    "שם משפחה",
-    "טלפון",
-    "צד",
-    "קרבה",
-    "סטטוס",
-    "מוזמנים",
-    "גיל",
-    "קבוצה",
-  ];
-  if (knownTokens.some((t) => joined.includes(t))) return true;
-  // If first cell is a pure integer, it's almost certainly a data row.
-  if (/^\d+$/.test(firstRow[0]?.trim() ?? "")) return false;
-  // If any cell looks like a phone, it's data.
-  if (firstRow.some((c) => /\d{7,}/.test(c))) return false;
+// Decide whether a row is a header. A row is a header if at least one cell
+// matches a known header hint AND no cell looks like a phone number or a
+// pure row index (which would mean it's data).
+function isHeaderRow(cells: string[]): boolean {
+  if (!cells.length) return false;
+  const hasKnown = classifyHeader(cells);
+  if (Object.keys(hasKnown).length === 0) return false;
+  // If any cell looks like a 7+ digit number, this is probably data.
+  for (const c of cells) {
+    if (/^\+?\d{7,}$/.test(c.trim())) return false;
+  }
   return true;
 }
 
-function buildRowFromPositional(cells: string[]): {
-  raw: Record<string, string>;
-  row: Partial<CsvGuestRow> & { fullName?: string };
-} {
-  // Supported positional shapes:
-  //   A) 7 cols: #, fullName, ageGroup, group, status, genderAge, phone
-  //   B) 6 cols: same as above minus the leading index
-  //   C) 5 cols: fullName, ageGroup, group, status, phone
-  //   D) 2-3 cols: fullName, phone?, group?
-  //
-  // We always keep a copy of the cells under numeric keys so error reports
-  // can point back to the source.
-  const raw: Record<string, string> = {};
-  cells.forEach((c, i) => (raw[`col${i + 1}`] = c));
-  const out: Partial<CsvGuestRow> & { fullName?: string } = {};
-
+// Positional defaults when we don't have a header row.
+// We look at the shape of the first data row to guess.
+function inferPositionalMap(sampleCells: string[]): Record<number, Role> {
+  const len = sampleCells.length;
+  const map: Record<number, Role> = {};
   const hasLeadingIndex =
-    cells.length >= 6 && /^\d+$/.test((cells[0] ?? "").trim());
+    len >= 2 && /^\d+$/.test((sampleCells[0] ?? "").trim());
   const off = hasLeadingIndex ? 1 : 0;
-  const col = (i: number) => (cells[off + i] ?? "").trim();
+  if (hasLeadingIndex) map[0] = "index";
 
-  out.fullName = col(0);
-
-  const remaining = cells.length - off;
+  const remaining = len - off;
   if (remaining >= 6) {
-    // fullName, ageGroup, group, status, genderAge, phone
-    const ageGroup = col(1);
-    const group = col(2);
-    const status = col(3);
-    const phone = col(5);
-    out.relation = group || null;
-    out.rsvpStatus = STATUS_MAP[status.toLowerCase()] ?? "PENDING";
-    out.phone = phone || null;
-    if (ageGroup) out.notes = ageGroup;
-  } else if (remaining >= 5) {
-    const ageGroup = col(1);
-    const group = col(2);
-    const status = col(3);
-    const phone = col(4);
-    out.relation = group || null;
-    out.rsvpStatus = STATUS_MAP[status.toLowerCase()] ?? "PENDING";
-    out.phone = phone || null;
-    if (ageGroup) out.notes = ageGroup;
+    // # , fullName, ageGroup, group, status, genderAge, phone
+    map[off + 0] = "fullName";
+    map[off + 1] = "ageGroup";
+    map[off + 2] = "relation";
+    map[off + 3] = "status";
+    // col off+4 is redundant gendered age — leave unmapped
+    map[off + 5] = "phone";
+  } else if (remaining === 5) {
+    // fullName, ageGroup, group, status, phone
+    map[off + 0] = "fullName";
+    map[off + 1] = "ageGroup";
+    map[off + 2] = "relation";
+    map[off + 3] = "status";
+    map[off + 4] = "phone";
   } else if (remaining === 4) {
-    out.relation = col(1) || null;
-    out.rsvpStatus = STATUS_MAP[col(2).toLowerCase()] ?? "PENDING";
-    out.phone = col(3) || null;
+    map[off + 0] = "fullName";
+    map[off + 1] = "relation";
+    map[off + 2] = "status";
+    map[off + 3] = "phone";
   } else if (remaining === 3) {
-    out.phone = col(1) || null;
-    out.relation = col(2) || null;
-    out.rsvpStatus = "PENDING";
+    map[off + 0] = "fullName";
+    map[off + 1] = "phone";
+    map[off + 2] = "relation";
   } else if (remaining === 2) {
-    out.phone = col(1) || null;
-    out.rsvpStatus = "PENDING";
-  } else {
-    out.rsvpStatus = "PENDING";
+    map[off + 0] = "fullName";
+    map[off + 1] = "phone";
+  } else if (remaining === 1) {
+    map[off + 0] = "fullName";
   }
-
-  return { raw, row: out };
+  return map;
 }
 
-function buildRowFromHeader(
-  raw: Record<string, string>
+function extractRoles(
+  cells: string[],
+  colMap: Record<number, Role>
 ): Partial<CsvGuestRow> & { fullName?: string } {
-  const get = (...keys: string[]) => {
-    for (const k of keys) {
-      const v = raw[k];
-      if (v !== undefined && String(v).trim() !== "") return String(v).trim();
-    }
-    return "";
-  };
+  const by: Partial<Record<Role, string>> = {};
+  for (const [idxStr, role] of Object.entries(colMap)) {
+    const idx = Number(idxStr);
+    const v = (cells[idx] ?? "").toString().trim();
+    if (v) by[role] = v;
+  }
 
-  const firstName = get("firstname", "first name", "שם פרטי");
-  const lastName = get("lastname", "last name", "שם משפחה");
-  const fullName = get("שם מלא", "שם", "fullname", "full name", "name");
-  const phoneRaw = get("phone", "טלפון", "נייד", "מובייל", "mobile");
-  const sideRaw = get("side", "צד").toLowerCase();
-  const relationRaw = get(
-    "relation",
-    "קרבה",
-    "קבוצה",
-    "סוג",
-    "קטגוריה",
-    "group"
-  );
-  const invitedRaw = get(
-    "invitedcount",
-    "invited count",
-    "invited",
-    "מוזמנים",
-    "כמות"
-  );
-  const statusRaw = get("status", "rsvp", "סטטוס", "סטטוס הגעה", "הגעה");
-  const ageGroup = get("גיל", "age", "age group");
-  const notesExtra = get("notes", "הערות", "הערה");
-
-  return {
-    fullName: fullName || `${firstName} ${lastName}`.trim(),
-    firstName: firstName || undefined,
-    lastName: lastName || undefined,
-    phone: phoneRaw || null,
-    side: SIDE_MAP[sideRaw] ?? "BOTH",
-    relation: relationRaw || null,
-    invitedCount: Math.max(1, parseInt(invitedRaw, 10) || 1),
-    rsvpStatus: STATUS_MAP[statusRaw.toLowerCase()] ?? "PENDING",
-    notes: [ageGroup, notesExtra].filter(Boolean).join(" · ") || null,
-  };
+  const out: Partial<CsvGuestRow> & { fullName?: string } = {};
+  if (by.fullName) out.fullName = by.fullName;
+  if (by.firstName) out.firstName = by.firstName;
+  if (by.lastName) out.lastName = by.lastName;
+  if (by.phone) out.phone = by.phone;
+  if (by.side) out.side = SIDE_MAP[by.side.toLowerCase()] ?? "BOTH";
+  if (by.relation) out.relation = by.relation;
+  if (by.invitedCount)
+    out.invitedCount = Math.max(1, parseInt(by.invitedCount, 10) || 1);
+  if (by.status)
+    out.rsvpStatus = STATUS_MAP[by.status.toLowerCase()] ?? "PENDING";
+  const notesParts = [by.ageGroup, by.notes].filter(Boolean);
+  if (notesParts.length) out.notes = notesParts.join(" · ");
+  return out;
 }
 
 export function parseGuestCsv(csvText: string): ParsedCsv {
-  // First, do a headerless parse so we can inspect the first row.
-  const probe = Papa.parse<string[]>(csvText, {
+  // 1. Parse headerless so we can inspect the raw cell grid.
+  const parsed = Papa.parse<string[]>(csvText, {
     header: false,
     skipEmptyLines: true,
   });
-  const rows = probe.data as string[][];
-  const hasHeader = rows.length > 0 ? looksLikeHeader(rows[0]) : false;
+  const rows = (parsed.data as string[][]).filter(
+    (r) => r && r.some((c) => String(c ?? "").trim() !== "")
+  );
 
   const valid: CsvGuestRow[] = [];
   const errors: ParsedCsv["errors"] = [];
+  if (rows.length === 0) return { valid, errors };
 
-  const records: {
-    raw: Record<string, string>;
-    partial: Partial<CsvGuestRow> & { fullName?: string };
-    rowIndex: number;
-  }[] = [];
-
-  if (hasHeader) {
-    const headerParsed = Papa.parse<Record<string, string>>(csvText, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: normHeader,
-    });
-    headerParsed.data.forEach((raw, i) => {
-      records.push({
-        raw,
-        partial: buildRowFromHeader(raw),
-        rowIndex: i + 2,
-      });
-    });
-  } else {
-    rows.forEach((cells, i) => {
-      const built = buildRowFromPositional(cells);
-      records.push({ raw: built.raw, partial: built.row, rowIndex: i + 1 });
-    });
+  // Drop leading "title" rows — rows with a single non-empty cell (like
+  // "רשימת מוזמנים לחתונה") that sit above the real header. We only do
+  // this if the file has any multi-cell row; otherwise we might be dealing
+  // with a single-column name list and shouldn't discard anything.
+  const anyMultiCell = rows.some(
+    (r) => r.filter((c) => String(c ?? "").trim() !== "").length >= 2
+  );
+  let skippedBefore = 0;
+  if (anyMultiCell) {
+    while (
+      rows.length > 0 &&
+      rows[0].filter((c) => String(c ?? "").trim() !== "").length < 2
+    ) {
+      rows.shift();
+      skippedBefore++;
+    }
   }
 
-  for (const rec of records) {
-    const p = rec.partial;
+  // 2. Header detection + column mapping.
+  let headerRow: string[] | null = null;
+  let dataRows: string[][] = rows;
+  let colMap: Record<number, Role> = {};
+
+  if (isHeaderRow(rows[0])) {
+    headerRow = rows[0];
+    dataRows = rows.slice(1);
+    colMap = classifyHeader(headerRow);
+  }
+
+  // If header didn't identify a name column, infer a positional map from
+  // the first data row as a fallback. Only fill in missing roles.
+  if (dataRows.length > 0) {
+    const needsName =
+      !Object.values(colMap).some(
+        (r) => r === "fullName" || r === "firstName"
+      );
+    if (needsName) {
+      const inferred = inferPositionalMap(dataRows[0]);
+      for (const [k, v] of Object.entries(inferred)) {
+        const idx = Number(k);
+        if (colMap[idx] === undefined) colMap[idx] = v as Role;
+      }
+    }
+  }
+
+  // 3. Build each row.
+  dataRows.forEach((cells, i) => {
+    const raw: Record<string, string> = {};
+    cells.forEach((c, idx) => {
+      const key = headerRow?.[idx]?.trim() || `col${idx + 1}`;
+      raw[key] = String(c ?? "");
+    });
+
+    let p = extractRoles(cells, colMap);
+
+    // Last-ditch fallback: if no name found, try positional inference on
+    // this row directly (helps when rows have variable widths).
+    if (!p.fullName && !p.firstName) {
+      const altMap = inferPositionalMap(cells);
+      const alt = extractRoles(cells, altMap);
+      p = { ...alt, ...p };
+      if (!p.fullName && alt.fullName) p.fullName = alt.fullName;
+    }
 
     let firstName = (p.firstName ?? "").trim();
     let lastName = (p.lastName ?? "").trim();
@@ -254,19 +305,23 @@ export function parseGuestCsv(csvText: string): ParsedCsv {
       lastName = lastName || split.lastName;
     }
     if (!firstName) {
-      errors.push({ row: rec.rowIndex, reason: "חסר שם", raw: rec.raw });
-      continue;
+      errors.push({
+        row: i + skippedBefore + (headerRow ? 2 : 1),
+        reason: "חסר שם",
+        raw,
+      });
+      return;
     }
     if (!lastName) lastName = firstName;
 
     const phone = p.phone ? normalizePhone(p.phone) : null;
     if (p.phone && !phone) {
       errors.push({
-        row: rec.rowIndex,
+        row: i + skippedBefore + (headerRow ? 2 : 1),
         reason: `טלפון לא תקין: ${p.phone}`,
-        raw: rec.raw,
+        raw,
       });
-      continue;
+      return;
     }
 
     valid.push({
@@ -279,7 +334,7 @@ export function parseGuestCsv(csvText: string): ParsedCsv {
       rsvpStatus: p.rsvpStatus ?? "PENDING",
       notes: p.notes ?? null,
     });
-  }
+  });
 
   return { valid, errors };
 }
