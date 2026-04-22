@@ -17,16 +17,36 @@ export async function POST(req: Request) {
   let added = 0;
   let updated = 0;
   for (const row of valid) {
-    const existing = await prisma.guest.findUnique({ where: { phone: row.phone } });
+    // Dedup key:
+    //  - If the row has a phone, use phone (it's unique in the DB).
+    //  - Otherwise, fall back to firstName+lastName so repeat imports
+    //    don't create duplicates for guests without a phone on file.
+    let existing = null as Awaited<
+      ReturnType<typeof prisma.guest.findFirst>
+    > | null;
+    if (row.phone) {
+      existing = await prisma.guest.findUnique({ where: { phone: row.phone } });
+    } else {
+      existing = await prisma.guest.findFirst({
+        where: {
+          firstName: row.firstName,
+          lastName: row.lastName,
+          phone: null,
+        },
+      });
+    }
     if (existing) {
       await prisma.guest.update({
-        where: { phone: row.phone },
+        where: { id: existing.id },
         data: {
           firstName: row.firstName,
           lastName: row.lastName,
+          phone: row.phone ?? null,
           side: row.side,
-          relation: row.relation ?? null,
+          relation: row.relation,
           invitedCount: row.invitedCount,
+          rsvpStatus: row.rsvpStatus,
+          notes: row.notes,
         },
       });
       updated++;
@@ -35,10 +55,12 @@ export async function POST(req: Request) {
         data: {
           firstName: row.firstName,
           lastName: row.lastName,
-          phone: row.phone,
+          phone: row.phone ?? null,
           side: row.side,
-          relation: row.relation ?? null,
+          relation: row.relation,
           invitedCount: row.invitedCount,
+          rsvpStatus: row.rsvpStatus,
+          notes: row.notes,
         },
       });
       added++;

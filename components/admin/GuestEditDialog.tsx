@@ -41,7 +41,7 @@ export function GuestEditDialog({
       const payload = {
         firstName,
         lastName,
-        phone,
+        phone: phone.trim() ? phone : null,
         side,
         relation: relation || null,
         invitedCount: Number(invitedCount),
@@ -99,7 +99,7 @@ export function GuestEditDialog({
             </div>
           </div>
           <div>
-            <label className="label">טלפון</label>
+            <label className="label">טלפון (אופציונלי)</label>
             <input
               className="input"
               type="tel"
@@ -107,7 +107,6 @@ export function GuestEditDialog({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="050-1234567"
-              required
             />
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -25,7 +25,7 @@ export async function GET() {
 const CreateSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  phone: z.string().min(3),
+  phone: z.string().optional().nullable(),
   side: z.enum(["BRIDE", "GROOM", "BOTH"]),
   relation: z.string().optional().nullable(),
   invitedCount: z.number().int().min(1).max(20),
@@ -40,15 +40,22 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "invalid" }, { status: 400 });
   }
-  const phone = normalizePhone(parsed.data.phone);
-  if (!phone) {
-    return NextResponse.json({ ok: false, error: "invalid_phone" }, { status: 400 });
+  const rawPhone = parsed.data.phone?.trim() || null;
+  let phone: string | null = null;
+  if (rawPhone) {
+    phone = normalizePhone(rawPhone);
+    if (!phone) {
+      return NextResponse.json({ ok: false, error: "invalid_phone" }, { status: 400 });
+    }
   }
   const guest = await prisma.guest.create({
     data: {
-      ...parsed.data,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
       phone,
+      side: parsed.data.side,
       relation: parsed.data.relation ?? null,
+      invitedCount: parsed.data.invitedCount,
       tableId: parsed.data.tableId || null,
     },
   });

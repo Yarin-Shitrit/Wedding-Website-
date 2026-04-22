@@ -23,6 +23,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
 
-  await createGuestSession(guest.id, guest.phone);
-  return NextResponse.json({ ok: true, phone: guest.phone });
+  await createGuestSession(guest.id, phone);
+  return NextResponse.json({ ok: true, phone });
 }

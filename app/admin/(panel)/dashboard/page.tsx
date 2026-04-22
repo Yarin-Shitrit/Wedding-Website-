@@ -63,14 +63,18 @@ export default async function DashboardPage() {
                 <span>
                   {g.firstName} {g.lastName}
                 </span>
-                <a
-                  className="text-sage-700 text-sm"
-                  href={`https://wa.me/${g.phone.replace("+", "")}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  WhatsApp
-                </a>
+                {g.phone ? (
+                  <a
+                    className="text-sage-700 text-sm"
+                    href={`https://wa.me/${g.phone.replace("+", "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    WhatsApp
+                  </a>
+                ) : (
+                  <span className="text-xs text-ink/40">ללא טלפון</span>
+                )}
               </li>
             ))}
           </ul>

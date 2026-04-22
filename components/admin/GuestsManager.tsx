@@ -33,7 +33,7 @@ export function GuestsManager({
       if (!needle) return true;
       return (
         `${g.firstName} ${g.lastName}`.toLowerCase().includes(needle) ||
-        g.phone.includes(needle) ||
+        (g.phone ?? "").includes(needle) ||
         (g.relation ?? "").toLowerCase().includes(needle)
       );
     });
@@ -111,7 +111,9 @@ export function GuestsManager({
                     <div className="text-xs text-ink/50">{g.relation}</div>
                   )}
                 </td>
-                <td className="px-4 py-3 tabular-nums">{g.phone}</td>
+                <td className="px-4 py-3 tabular-nums">
+                  {g.phone ?? <span className="text-ink/30">—</span>}
+                </td>
                 <td className="px-4 py-3">{he.admin.side[g.side as Side]}</td>
                 <td className="px-4 py-3 tabular-nums">
                   {g.attendingCount ?? "—"} / {g.invitedCount}
@@ -166,7 +168,8 @@ export function GuestsManager({
                   {g.firstName} {g.lastName}
                 </div>
                 <div className="text-xs text-ink/60">
-                  {g.phone} · {he.admin.side[g.side as Side]}
+                  {g.phone ? `${g.phone} · ` : ""}
+                  {he.admin.side[g.side as Side]}
                   {g.relation ? ` · ${g.relation}` : ""}
                 </div>
               </div>
