@@ -24,7 +24,7 @@ model Guest {
   id             String     @id @default(cuid())
   firstName      String
   lastName       String
-  phone          String     @unique
+  phone          String?    @unique
   side           Side       @default(BOTH)
   relation       String?
   invitedCount   Int        @default(1)

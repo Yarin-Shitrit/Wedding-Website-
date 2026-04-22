@@ -20,7 +20,7 @@ export type Metrics = {
     seated: number;
   }[];
   dietary: { value: string; count: number }[];
-  pending: { id: string; firstName: string; lastName: string; phone: string }[];
+  pending: { id: string; firstName: string; lastName: string; phone: string | null }[];
   responseOverTime: { date: string; responses: number }[];
 };
 

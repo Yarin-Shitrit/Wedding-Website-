@@ -61,7 +61,7 @@ export async function PATCH(req: Request) {
 
   await prisma.auditLog.create({
     data: {
-      actor: current.phone,
+      actor: current.phone ?? current.id,
       action: "rsvp.update",
       payload: { status: data.rsvpStatus, count: bounded },
     },

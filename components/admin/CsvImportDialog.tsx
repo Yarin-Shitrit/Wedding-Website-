@@ -10,6 +10,19 @@ type Result = {
   errors: { row: number; reason: string }[];
 };
 
+async function fileToCsv(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    const XLSX = await import("xlsx");
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const first = wb.SheetNames[0];
+    if (!first) return "";
+    return XLSX.utils.sheet_to_csv(wb.Sheets[first]);
+  }
+  return await file.text();
+}
+
 export function CsvImportDialog({
   onClose,
   onDone,
@@ -27,8 +40,13 @@ export function CsvImportDialog({
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    const text = await file.text();
-    setCsv(text);
+    setError(null);
+    try {
+      const text = await fileToCsv(file);
+      setCsv(text);
+    } catch {
+      setError("לא הצלחנו לקרוא את הקובץ");
+    }
   }
 
   async function commit() {
@@ -63,17 +81,42 @@ export function CsvImportDialog({
           </button>
         </div>
         <div className="p-4 space-y-4">
-          <p className="text-xs text-ink/60 leading-relaxed">
-            פורמט עמודות: <code dir="ltr">firstName, lastName, phone, side, relation, invitedCount</code>.
-            <br />
-            אפשר לרשום <code dir="ltr">side</code> כ־
-            <code>bride/groom/both</code> או <code>כלה/חתן/משותף</code>.
-          </p>
+          <div className="text-xs text-ink/60 leading-relaxed space-y-1">
+            <p>ניתן להעלות קובץ <strong>CSV</strong> או <strong>XLSX</strong> (Google Sheets / Excel).</p>
+            <p>
+              פורמט מומלץ עם כותרות:{" "}
+              <code dir="ltr">
+                שם מלא, טלפון, צד, קרבה, מוזמנים, סטטוס
+              </code>{" "}
+              — או באנגלית:{" "}
+              <code dir="ltr">
+                firstName, lastName, phone, side, relation, invitedCount
+              </code>
+              .
+            </p>
+            <p>
+              גם ללא כותרות — נזהה אוטומטית פורמט של 6-7 עמודות:{" "}
+              <span dir="ltr">
+                [#], שם מלא, גיל, קבוצה, סטטוס, תיאור, טלפון
+              </span>
+              .
+            </p>
+            <p>
+              המערכת תפצל שם מלא לשם פרטי + משפחה, תשלים קידומת לטלפונים
+              חסרי 0, ותתרגם ״טרם סומן״ ל״ממתין״. מוזמנים ללא טלפון
+              יישמרו ללא אפשרות RSVP עצמית.
+            </p>
+          </div>
           <label className="block border-2 border-dashed border-sage-100 rounded-xl2 p-8 text-center cursor-pointer hover:border-sage-500 transition">
             <Upload className="mx-auto text-sage-600 mb-2" size={22} />
             <span className="block text-sm">{he.admin.csv.dropHere}</span>
             {fileName && <span className="block text-xs text-ink/60 mt-1">{fileName}</span>}
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+            <input
+              type="file"
+              accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              onChange={onFile}
+            />
           </label>
 
           {error && <p className="text-sm text-blush-700">{error}</p>}

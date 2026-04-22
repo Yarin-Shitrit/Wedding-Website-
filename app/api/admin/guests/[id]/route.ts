@@ -15,7 +15,7 @@ async function requireAdmin() {
 const PatchSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  phone: z.string().optional(),
+  phone: z.string().nullable().optional(),
   side: z.enum(["BRIDE", "GROOM", "BOTH"]).optional(),
   relation: z.string().nullable().optional(),
   invitedCount: z.number().int().min(1).max(20).optional(),
@@ -40,12 +40,17 @@ export async function PATCH(
   }
 
   const data: Record<string, unknown> = { ...parsed.data };
-  if (typeof parsed.data.phone === "string") {
-    const normalized = normalizePhone(parsed.data.phone);
-    if (!normalized) {
-      return NextResponse.json({ ok: false, error: "invalid_phone" }, { status: 400 });
+  if (parsed.data.phone !== undefined) {
+    const trimmed = parsed.data.phone?.trim() || null;
+    if (!trimmed) {
+      data.phone = null;
+    } else {
+      const normalized = normalizePhone(trimmed);
+      if (!normalized) {
+        return NextResponse.json({ ok: false, error: "invalid_phone" }, { status: 400 });
+      }
+      data.phone = normalized;
     }
-    data.phone = normalized;
   }
   if (parsed.data.tableId === "") data.tableId = null;
 
