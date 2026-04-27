@@ -1,73 +1,100 @@
-import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import { Countdown } from "@/components/Countdown";
+import { Hero } from "@/components/sections/Hero";
+import { Story } from "@/components/sections/Story";
+import { Moments } from "@/components/sections/Moments";
+import { Gallery } from "@/components/sections/Gallery";
+import { Venue } from "@/components/sections/Venue";
+import { Schedule } from "@/components/sections/Schedule";
+import { Parking } from "@/components/sections/Parking";
+import { Faq } from "@/components/sections/Faq";
+import { RsvpCta } from "@/components/sections/RsvpCta";
+import { Footer } from "@/components/sections/Footer";
+import { SectionDots } from "@/components/sections/SectionDots";
 import { getSettings } from "@/lib/settings";
+import {
+  getMoments,
+  getGalleryItems,
+  getScheduleItems,
+  getFaqItems
+} from "@/lib/content";
+
+export const dynamic = "force-dynamic";
+
+const HE_DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+const HE_MONTHS = [
+  "ינואר",
+  "פברואר",
+  "מרץ",
+  "אפריל",
+  "מאי",
+  "יוני",
+  "יולי",
+  "אוגוסט",
+  "ספטמבר",
+  "אוקטובר",
+  "נובמבר",
+  "דצמבר"
+];
+
+function formatHebrewDate(d: Date) {
+  const day = HE_DAYS[d.getDay()];
+  const month = HE_MONTHS[d.getMonth()];
+  return `יום ${day} · ${d.getDate()} ב${month} ${d.getFullYear()}`;
+}
 
 export default async function HomePage() {
-  const s = await getSettings();
-  const date = s.weddingDate.toISOString();
-  const formatted = new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "full",
-    timeStyle: "short"
-  }).format(s.weddingDate);
+  const [settings, moments, gallery, schedule, faq] = await Promise.all([
+    getSettings(),
+    getMoments(),
+    getGalleryItems(),
+    getScheduleItems(),
+    getFaqItems()
+  ]);
+
+  const dateLabel = formatHebrewDate(new Date(settings.weddingDate));
+  const dateIso = new Date(settings.weddingDate).toISOString();
+  const venueLine = [settings.venueName, settings.venueAddress, "קבלת פנים 19:00"]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <>
       <SiteNav />
       <main>
-        <section className="relative">
-          <div className="max-w-5xl mx-auto px-6 py-24 text-center">
-            <p className="uppercase tracking-[0.4em] text-sm text-rose-500">We're getting married</p>
-            <h1 className="mt-4 text-6xl sm:text-7xl text-rose-600">
-              {s.brideName} <span className="text-stone-400">&amp;</span> {s.groomName}
-            </h1>
-            <p className="mt-6 text-stone-600">{formatted}</p>
-            {s.venueName && (
-              <p className="text-stone-600">
-                {s.venueName}
-                {s.venueAddress ? ` · ${s.venueAddress}` : ""}
-              </p>
-            )}
-            <div className="mt-10">
-              <Countdown isoDate={date} />
-            </div>
-            <div className="mt-10 flex gap-3 justify-center">
-              <Link href="/rsvp" className="btn-primary">
-                RSVP
-              </Link>
-              <Link href="/venue" className="btn-secondary">
-                Venue &amp; map
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="max-w-5xl mx-auto px-6 pb-24 grid gap-6 sm:grid-cols-3">
-          <Link href="/rsvp" className="card hover:shadow-md transition">
-            <h2 className="text-2xl text-rose-600">RSVP</h2>
-            <p className="mt-2 text-stone-600 text-sm">
-              Confirm your attendance and number of seats. You can update your answer anytime.
-            </p>
-          </Link>
-          <Link href="/venue" className="card hover:shadow-md transition">
-            <h2 className="text-2xl text-rose-600">Venue</h2>
-            <p className="mt-2 text-stone-600 text-sm">
-              Directions, map, and everything you need to arrive on time.
-            </p>
-          </Link>
-          <Link href="/info" className="card hover:shadow-md transition">
-            <h2 className="text-2xl text-rose-600">Guest info</h2>
-            <p className="mt-2 text-stone-600 text-sm">
-              Parking, dress code, schedule, and frequently asked questions.
-            </p>
-          </Link>
-        </section>
-
-        {s.welcomeMessage && (
-          <section className="max-w-3xl mx-auto px-6 pb-24 text-center">
-            <p className="text-lg text-stone-700 italic">"{s.welcomeMessage}"</p>
-          </section>
-        )}
+        <Hero
+          bride={settings.brideName}
+          groom={settings.groomName}
+          dateLabel={dateLabel}
+          dateIso={dateIso}
+          venueLine={venueLine}
+        />
+        <SectionDots />
+        <Story
+          eyebrow={settings.storyEyebrow}
+          title={settings.storyTitle}
+          body={settings.storyBody}
+          quote={settings.storyQuote}
+        />
+        <Moments moments={moments} />
+        <Gallery items={gallery} />
+        <Venue
+          venueName={settings.venueName}
+          venueAddress={settings.venueAddress}
+          venueMapUrl={settings.venueMapUrl}
+        />
+        <Schedule items={schedule} />
+        <Parking
+          parkingInfo={settings.parkingInfo}
+          shuttleInfo={settings.shuttleInfo}
+          dressCode={settings.dressCode}
+        />
+        <Faq items={faq} />
+        <RsvpCta deadline={settings.rsvpDeadline} />
+        <Footer
+          bride={settings.brideName}
+          groom={settings.groomName}
+          dateLabel={dateLabel}
+        />
       </main>
     </>
   );

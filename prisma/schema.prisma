@@ -1,24 +1,17 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-enum RsvpStatus {
-  PENDING
-  ATTENDING
-  DECLINED
-  MAYBE
-}
-
-enum Side {
-  BRIDE
-  GROOM
-  SHARED
-}
+// SQLite does not support Prisma enums; both fields are validated at the
+// application layer (zod) and constrained to the values below.
+//   RsvpStatus: PENDING | ATTENDING | DECLINED | MAYBE
+//   Side:       BRIDE | GROOM | SHARED
 
 model Guest {
   id              String     @id @default(cuid())
@@ -26,11 +19,11 @@ model Guest {
   lastName        String?
   phone           String?    @unique
   email           String?
-  side            Side       @default(SHARED)
+  side            String     @default("SHARED")
   group           String?
   seatsInvited    Int        @default(1)
   seatsConfirmed  Int        @default(0)
-  status          RsvpStatus @default(PENDING)
+  status          String     @default("PENDING")
   dietary         String?
   notes           String?
   rsvpToken       String     @unique @default(cuid())
@@ -65,5 +58,67 @@ model Settings {
   parkingInfo     String   @default("")
   dressCode       String   @default("")
   welcomeMessage  String   @default("")
+
+  // ─── design refactor additions ───
+  storyTitle      String   @default("הסיפור שלנו")
+  storyEyebrow    String   @default("פרק ראשון")
+  storyBody       String   @default("")
+  storyQuote      String   @default("")
+  shuttleInfo     String   @default("")
+  heroLayout      String   @default("centered") // "centered" | "split"
+  palette         String   @default("terracotta")
+  rsvpDeadline    String   @default("12.10")
+
   updatedAt       DateTime @updatedAt
+}
+
+model Moment {
+  id        String   @id @default(cuid())
+  chapter   String   @default("I")
+  year      String
+  title     String
+  body      String
+  imageUrl  String?
+  imageAlt  String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+model GalleryItem {
+  id        String   @id @default(cuid())
+  src       String?
+  alt       String
+  ratio     String   @default("1/1")
+  span      Int      @default(1)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+model ScheduleItem {
+  id        String   @id @default(cuid())
+  time      String
+  title     String
+  body      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+model FaqItem {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
 }

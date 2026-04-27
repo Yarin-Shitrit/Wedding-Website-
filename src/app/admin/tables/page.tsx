@@ -31,7 +31,7 @@ export default async function TablesPage() {
             id: g.id,
             firstName: g.firstName,
             lastName: g.lastName,
-            status: g.status,
+            status: g.status as "PENDING" | "ATTENDING" | "DECLINED" | "MAYBE",
             seatsConfirmed: g.seatsConfirmed,
             seatsInvited: g.seatsInvited
           }))
@@ -40,7 +40,7 @@ export default async function TablesPage() {
           id: g.id,
           firstName: g.firstName,
           lastName: g.lastName,
-          status: g.status,
+          status: g.status as "PENDING" | "ATTENDING" | "DECLINED" | "MAYBE",
           seatsConfirmed: g.seatsConfirmed,
           seatsInvited: g.seatsInvited
         }))}

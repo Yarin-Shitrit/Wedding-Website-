@@ -13,6 +13,21 @@ const RsvpInput = z.object({
   notes: z.string().optional().nullable()
 });
 
+function digits(p: string) {
+  return p.replace(/[^0-9]/g, "");
+}
+
+function phoneVariants(input: string): string[] {
+  const d = digits(input);
+  if (!d) return [];
+  const local = d.startsWith("972")
+    ? d.slice(3)
+    : d.startsWith("0")
+      ? d.slice(1)
+      : d;
+  return [`+972${local}`, `972${local}`, `0${local}`, local, d];
+}
+
 export async function POST(req: NextRequest) {
   const parsed = RsvpInput.safeParse(await req.json());
   if (!parsed.success) {
@@ -25,7 +40,9 @@ export async function POST(req: NextRequest) {
     guest = await prisma.guest.findUnique({ where: { rsvpToken: data.token } });
   }
   if (!guest) {
-    guest = await prisma.guest.findUnique({ where: { phone: data.phone } });
+    guest = await prisma.guest.findFirst({
+      where: { phone: { in: phoneVariants(data.phone) } }
+    });
   }
 
   const maxSeats = guest?.seatsInvited ?? Math.max(1, data.seatsConfirmed);
@@ -37,7 +54,8 @@ export async function POST(req: NextRequest) {
       data: {
         firstName: data.firstName,
         lastName: data.lastName ?? guest.lastName,
-        phone: data.phone,
+        // Keep the originally-stored phone format unchanged unless caller passed a token.
+        phone: guest.phone ?? data.phone,
         status: data.status,
         seatsConfirmed: data.status === "ATTENDING" ? seats : 0,
         dietary: data.dietary ?? null,

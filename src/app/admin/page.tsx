@@ -1,6 +1,8 @@
 import { getMetrics } from "@/lib/metrics";
 import { MetricsCharts } from "./MetricsCharts";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminHome() {
   const m = await getMetrics();
 

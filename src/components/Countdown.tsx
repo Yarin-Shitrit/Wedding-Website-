@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 
 function diff(target: Date) {
-  const now = Date.now();
-  const ms = Math.max(0, target.getTime() - now);
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((ms / (1000 * 60)) % 60);
-  const seconds = Math.floor((ms / 1000) % 60);
-  return { days, hours, minutes, seconds };
+  const ms = Math.max(0, target.getTime() - Date.now());
+  return {
+    days: Math.floor(ms / 86400000),
+    hours: Math.floor((ms / 3600000) % 24),
+    minutes: Math.floor((ms / 60000) % 60),
+    seconds: Math.floor((ms / 1000) % 60)
+  };
 }
 
 export function Countdown({ isoDate }: { isoDate: string }) {
@@ -21,19 +21,37 @@ export function Countdown({ isoDate }: { isoDate: string }) {
     return () => clearInterval(id);
   }, [isoDate]);
 
-  const cells = [
-    { label: "Days", value: t.days },
-    { label: "Hours", value: t.hours },
-    { label: "Minutes", value: t.minutes },
-    { label: "Seconds", value: t.seconds }
+  const cells: { label: string; value: number }[] = [
+    { label: "ימים", value: t.days },
+    { label: "שעות", value: t.hours },
+    { label: "דקות", value: t.minutes },
+    { label: "שניות", value: t.seconds }
   ];
 
   return (
-    <div className="flex gap-3 sm:gap-6 justify-center">
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: 4,
+        padding: "18px 4px",
+        borderTop: "1px solid var(--hair)",
+        borderBottom: "1px solid var(--hair)"
+      }}
+    >
       {cells.map((c) => (
-        <div key={c.label} className="bg-white rounded-xl px-4 py-3 shadow-sm min-w-[72px] text-center">
-          <div className="text-3xl font-display text-rose-600">{c.value}</div>
-          <div className="text-xs uppercase tracking-wider text-stone-500">{c.label}</div>
+        <div key={c.label} style={{ textAlign: "center" }}>
+          <div
+            className="display"
+            style={{ fontSize: 30, lineHeight: 1, color: "var(--ink)" }}
+          >
+            <span className="num-flip">
+              {String(c.value).padStart(2, "0")}
+            </span>
+          </div>
+          <div className="eyebrow" style={{ marginTop: 6, fontSize: 9 }}>
+            {c.label}
+          </div>
         </div>
       ))}
     </div>

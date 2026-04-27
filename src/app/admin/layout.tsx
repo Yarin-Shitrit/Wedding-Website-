@@ -5,39 +5,94 @@ const navItems = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/guests", label: "Guests" },
   { href: "/admin/tables", label: "Tables" },
+  { href: "/admin/content", label: "Content" },
   { href: "/admin/settings", label: "Settings" }
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex bg-sand-50">
-      <aside className="hidden md:flex flex-col w-56 bg-white border-r border-stone-100 p-5">
-        <Link href="/admin" className="font-display text-xl text-rose-600 mb-6">
+    <div
+      dir="ltr"
+      lang="en"
+      style={{ minHeight: "100vh", display: "flex", background: "var(--ivory)" }}
+    >
+      <aside
+        style={{
+          width: 224,
+          flex: "none",
+          background: "var(--paper)",
+          borderInlineEnd: "1px solid var(--hair)",
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: "100vh"
+        }}
+      >
+        <Link
+          href="/admin"
+          className="display"
+          style={{
+            fontSize: 20,
+            color: "var(--accent)",
+            textDecoration: "none",
+            marginBottom: 24
+          }}
+        >
           Couple Admin
         </Link>
-        <nav className="flex flex-col gap-1">
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {navItems.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className="rounded-lg px-3 py-2 text-sm text-stone-700 hover:bg-rose-50 hover:text-rose-600"
+              style={{
+                padding: "8px 12px",
+                fontSize: 14,
+                color: "var(--ink-2)",
+                textDecoration: "none",
+                borderInlineStart: "2px solid transparent",
+                transition: "all .2s"
+              }}
             >
               {n.label}
             </Link>
           ))}
         </nav>
-        <div className="mt-auto pt-6 text-xs text-stone-500">
-          <Link href="/" className="hover:text-rose-600">
+        <div
+          style={{
+            marginTop: "auto",
+            paddingTop: 24,
+            fontSize: 12,
+            color: "var(--ink-3)"
+          }}
+        >
+          <Link
+            href="/"
+            style={{ color: "var(--ink-3)", textDecoration: "none" }}
+          >
             ← Back to site
           </Link>
-          <form action="/api/admin/logout" method="post" className="mt-2">
-            <button className="text-stone-500 hover:text-rose-600" type="submit">
+          <form action="/api/admin/logout" method="post" style={{ marginTop: 8 }}>
+            <button
+              type="submit"
+              style={{
+                background: "none",
+                border: 0,
+                padding: 0,
+                color: "var(--ink-3)",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: "inherit"
+              }}
+            >
               Sign out
             </button>
           </form>
         </div>
       </aside>
-      <main className="flex-1 p-6 md:p-10 max-w-6xl">{children}</main>
+      <main style={{ flex: 1, padding: "32px 40px", maxWidth: 1080 }}>
+        {children}
+      </main>
     </div>
   );
 }

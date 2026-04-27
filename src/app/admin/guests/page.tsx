@@ -23,6 +23,8 @@ export default async function GuestsPage() {
       <GuestsClient
         initialGuests={guests.map((g) => ({
           ...g,
+          side: g.side as "BRIDE" | "GROOM" | "SHARED",
+          status: g.status as "PENDING" | "ATTENDING" | "DECLINED" | "MAYBE",
           createdAt: g.createdAt.toISOString(),
           updatedAt: g.updatedAt.toISOString(),
           respondedAt: g.respondedAt ? g.respondedAt.toISOString() : null

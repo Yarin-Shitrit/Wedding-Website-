@@ -11,8 +11,16 @@ const SettingsInput = z.object({
   venueAddress: z.string().default(""),
   venueMapUrl: z.string().default(""),
   parkingInfo: z.string().default(""),
+  shuttleInfo: z.string().default(""),
   dressCode: z.string().default(""),
-  welcomeMessage: z.string().default("")
+  welcomeMessage: z.string().default(""),
+  storyTitle: z.string().default(""),
+  storyEyebrow: z.string().default(""),
+  storyBody: z.string().default(""),
+  storyQuote: z.string().default(""),
+  heroLayout: z.enum(["centered", "split"]).default("centered"),
+  palette: z.string().default("terracotta"),
+  rsvpDeadline: z.string().default("12.10")
 });
 
 export async function PUT(req: NextRequest) {
