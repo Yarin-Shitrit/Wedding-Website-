@@ -15,7 +15,7 @@ const HOME_ANCHORS: { href: string; label: string }[] = [
 const PAGE_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "בית" },
   { href: "/rsvp", label: "אישור הגעה" },
-  { href: "/photos", label: "התמונות שלי" }
+  { href: "/share", label: "שיתוף תמונות" }
 ];
 
 export function SiteNav() {

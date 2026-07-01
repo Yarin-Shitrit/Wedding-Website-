@@ -83,7 +83,7 @@ export function Gallery({ items }: { items: Item[] }) {
         >
           <div className="ornament">· · ·</div>
           <Link
-            href="/photos"
+            href="/share"
             style={{
               display: "inline-block",
               padding: "10px 22px",
@@ -98,7 +98,7 @@ export function Gallery({ items }: { items: Item[] }) {
               letterSpacing: "0.02em"
             }}
           >
-            מצא את עצמך בתמונות
+            שתפו תמונות מהאירוע
           </Link>
         </div>
       </Reveal>

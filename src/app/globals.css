@@ -316,3 +316,9 @@ body > * {
 button {
   font-family: inherit;
 }
+
+@keyframes sf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

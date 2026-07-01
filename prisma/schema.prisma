@@ -100,6 +100,17 @@ model GalleryItem {
   @@index([order])
 }
 
+model GuestPhoto {
+  id           String   @id @default(cuid())
+  url          String   // Vercel Blob public URL
+  caption      String?
+  uploaderName String?
+  guestId      String?  // resolved from rsvpToken when present
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model ScheduleItem {
   id        String   @id @default(cuid())
   time      String
