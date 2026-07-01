@@ -4,24 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const HOME_ANCHORS: { href: string; label: string }[] = [
-  { href: "/#story", label: "סיפור" },
-  { href: "/#moments", label: "רגעים" },
-  { href: "/#gallery", label: "גלריה" },
-  { href: "/#venue", label: "מיקום" },
-  { href: "/#schedule", label: "סדר היום" },
-  { href: "/#faq", label: "שאלות" }
+  { href: "/celebration#story", label: "סיפור" },
+  { href: "/celebration#moments", label: "רגעים" },
+  { href: "/celebration#gallery", label: "גלריה" },
+  { href: "/celebration#venue", label: "מיקום" },
+  { href: "/celebration#schedule", label: "סדר היום" },
+  { href: "/celebration#faq", label: "שאלות" }
 ];
 
 const PAGE_LINKS: { href: string; label: string }[] = [
-  { href: "/", label: "בית" },
-  { href: "/rsvp", label: "אישור הגעה" },
-  { href: "/share", label: "שיתוף תמונות" }
+  { href: "/", label: "הגלריה" }
 ];
 
 export function SiteNav() {
   const pathname = usePathname();
-  const onHome = pathname === "/";
-  const links = onHome ? HOME_ANCHORS : PAGE_LINKS;
+  const onCelebration = pathname === "/celebration";
+  const links = onCelebration ? HOME_ANCHORS : PAGE_LINKS;
 
   return (
     <nav
@@ -54,7 +52,7 @@ export function SiteNav() {
           alignItems: "center"
         }}
       >
-        {!onHome ? (
+        {onCelebration ? (
           <li>
             <Link
               href="/"
@@ -69,7 +67,7 @@ export function SiteNav() {
                 whiteSpace: "nowrap"
               }}
             >
-              בית
+              הגלריה
             </Link>
           </li>
         ) : null}
@@ -92,25 +90,6 @@ export function SiteNav() {
             </Link>
           </li>
         ))}
-        <li>
-          <Link
-            href="/rsvp"
-            style={{
-              display: "inline-block",
-              padding: "6px 14px",
-              fontFamily: "Heebo",
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--ivory)",
-              background: "var(--accent)",
-              borderRadius: 9999,
-              textDecoration: "none",
-              whiteSpace: "nowrap"
-            }}
-          >
-            R · S · V · P
-          </Link>
-        </li>
       </ul>
     </nav>
   );

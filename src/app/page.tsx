@@ -1,99 +1,51 @@
 import { SiteNav } from "@/components/SiteNav";
-import { Hero } from "@/components/sections/Hero";
-import { Story } from "@/components/sections/Story";
-import { Moments } from "@/components/sections/Moments";
-import { Gallery } from "@/components/sections/Gallery";
-import { Venue } from "@/components/sections/Venue";
-import { Schedule } from "@/components/sections/Schedule";
-import { Parking } from "@/components/sections/Parking";
-import { Faq } from "@/components/sections/Faq";
-import { RsvpCta } from "@/components/sections/RsvpCta";
-import { Footer } from "@/components/sections/Footer";
-import { SectionDots } from "@/components/sections/SectionDots";
-import { getSettings } from "@/lib/settings";
-import {
-  getMoments,
-  getGalleryItems,
-  getScheduleItems,
-  getFaqItems
-} from "@/lib/content";
+import { prisma } from "@/lib/prisma";
+import { ShareClient } from "./share/ShareClient";
 
 export const dynamic = "force-dynamic";
 
-const HE_DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
-const HE_MONTHS = [
-  "ינואר",
-  "פברואר",
-  "מרץ",
-  "אפריל",
-  "מאי",
-  "יוני",
-  "יולי",
-  "אוגוסט",
-  "ספטמבר",
-  "אוקטובר",
-  "נובמבר",
-  "דצמבר"
-];
+export default async function HomePage({
+  searchParams
+}: {
+  searchParams: { token?: string };
+}) {
+  // Optional personalization — the page is public, the token only greets the
+  // guest by name and attributes their uploads.
+  let firstName: string | null = null;
+  if (searchParams.token) {
+    const g = await prisma.guest.findUnique({
+      where: { rsvpToken: searchParams.token },
+      select: { firstName: true }
+    });
+    if (g) firstName = g.firstName;
+  }
 
-function formatHebrewDate(d: Date) {
-  const day = HE_DAYS[d.getDay()];
-  const month = HE_MONTHS[d.getMonth()];
-  return `יום ${day} · ${d.getDate()} ב${month} ${d.getFullYear()}`;
-}
-
-export default async function HomePage() {
-  const [settings, moments, gallery, schedule, faq] = await Promise.all([
-    getSettings(),
-    getMoments(),
-    getGalleryItems(),
-    getScheduleItems(),
-    getFaqItems()
-  ]);
-
-  const dateLabel = formatHebrewDate(new Date(settings.weddingDate));
-  const dateIso = new Date(settings.weddingDate).toISOString();
-  const venueLine = [settings.venueName, settings.venueAddress, "קבלת פנים 19:00"]
-    .filter(Boolean)
-    .join(" · ");
+  const photos = await prisma.guestPhoto.findMany({
+    orderBy: { createdAt: "desc" }
+  });
 
   return (
     <>
       <SiteNav />
-      <main>
-        <Hero
-          bride={settings.brideName}
-          groom={settings.groomName}
-          dateLabel={dateLabel}
-          dateIso={dateIso}
-          venueLine={venueLine}
-        />
-        <SectionDots />
-        <Story
-          eyebrow={settings.storyEyebrow}
-          title={settings.storyTitle}
-          body={settings.storyBody}
-          quote={settings.storyQuote}
-        />
-        <Moments moments={moments} />
-        <Gallery items={gallery} />
-        <Venue
-          venueName={settings.venueName}
-          venueAddress={settings.venueAddress}
-          venueMapUrl={settings.venueMapUrl}
-        />
-        <Schedule items={schedule} />
-        <Parking
-          parkingInfo={settings.parkingInfo}
-          shuttleInfo={settings.shuttleInfo}
-          dressCode={settings.dressCode}
-        />
-        <Faq items={faq} />
-        <RsvpCta deadline={settings.rsvpDeadline} />
-        <Footer
-          bride={settings.brideName}
-          groom={settings.groomName}
-          dateLabel={dateLabel}
+      <main
+        style={{
+          maxWidth: 880,
+          margin: "0 auto",
+          padding: "60px 18px 140px",
+          background: "var(--paper)",
+          minHeight: "100vh"
+        }}
+      >
+        <ShareClient
+          initialPhotos={photos.map((p) => ({
+            id: p.id,
+            url: p.url,
+            type: p.type as "image" | "video",
+            caption: p.caption,
+            uploaderName: p.uploaderName
+          }))}
+          token={searchParams.token ?? null}
+          guestFirstName={firstName}
         />
       </main>
     </>

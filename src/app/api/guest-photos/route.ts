@@ -1,73 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-// Public, un-authed guest photo gallery. Guests POST a photo from /share;
-// the bytes go to Vercel Blob and a GuestPhoto row records the public URL.
-// Mirrors the public-write shape of /api/rsvp (no getSession()), plus the
-// nodejs runtime + filename sanitization conventions of /api/photos/download.
+// Public, un-authed guest photo/video gallery. In the gallery-first flow the
+// BROWSER uploads bytes directly to Vercel Blob (see /api/guest-photos/upload),
+// then POSTs the resulting metadata here to record a GuestPhoto row. Mirrors the
+// public-write shape of /api/rsvp (no getSession()) and the Hebrew error tone of
+// the previous direct-upload route.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
-const ALLOWED_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif"
-]);
+// The public Blob host suffix. Since this endpoint is public and un-authed, we
+// only accept URLs that live on Vercel Blob storage to block arbitrary-URL
+// injection (someone recording a bogus GuestPhoto pointing anywhere).
+const BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
 
-// Validate the optional text fields that ride alongside the file.
-const TextFields = z.object({
+// New POST contract: metadata recorded AFTER the client-upload resolves.
+const RecordBody = z.object({
+  url: z.string().url(),
+  pathname: z.string().optional(),
+  type: z.enum(["image", "video"]),
   caption: z.string().trim().max(140).optional(),
   uploaderName: z.string().trim().max(60).optional(),
   token: z.string().trim().optional()
 });
 
-function safeFilename(raw: string | null | undefined): string {
-  // Strip path components, keep only safe characters, clamp length.
-  if (!raw) return "photo.jpg";
-  const base = raw.split(/[\\/]/).pop() ?? "photo.jpg";
-  const cleaned = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
-  return cleaned || "photo.jpg";
-}
-
 export async function POST(req: NextRequest) {
-  let form: FormData;
+  let json: unknown;
   try {
-    form = await req.formData();
+    json = await req.json();
   } catch {
     return NextResponse.json({ error: "בקשה לא תקינה." }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "לא נבחרה תמונה." }, { status: 400 });
-  }
-  if (!ALLOWED_TYPES.has(file.type)) {
-    return NextResponse.json(
-      { error: "פורמט לא נתמך. אפשר JPEG, PNG, WebP או HEIC." },
-      { status: 400 }
-    );
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: "התמונה גדולה מדי (עד ‎15MB)." },
-      { status: 400 }
-    );
-  }
-
-  const parsed = TextFields.safeParse({
-    caption: form.get("caption") ?? undefined,
-    uploaderName: form.get("uploaderName") ?? undefined,
-    token: form.get("token") ?? undefined
-  });
+  const parsed = RecordBody.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { caption, uploaderName, token } = parsed.data;
+  const { url, pathname, type, caption, uploaderName, token } = parsed.data;
+
+  // SECURITY GUARD: reject anything not hosted on Vercel Blob storage.
+  let host: string;
+  try {
+    host = new URL(url).host;
+  } catch {
+    return NextResponse.json({ error: "כתובת לא תקינה." }, { status: 400 });
+  }
+  if (!host.endsWith(BLOB_HOST_SUFFIX)) {
+    return NextResponse.json({ error: "מקור הקובץ אינו מורשה." }, { status: 400 });
+  }
 
   // Optional personalization: resolve the guest from their rsvpToken.
   let guestId: string | null = null;
@@ -83,25 +64,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let blob;
-  try {
-    blob = await put(safeFilename(file.name), file, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: file.type
-    });
-  } catch (err) {
-    // Most commonly a missing/invalid BLOB_READ_WRITE_TOKEN.
-    console.error("guest-photos: blob upload failed", err);
-    return NextResponse.json(
-      { error: "העלאת התמונה נכשלה. נסו שוב מאוחר יותר." },
-      { status: 500 }
-    );
-  }
-
   const record = await prisma.guestPhoto.create({
     data: {
-      url: blob.url,
+      url,
+      pathname: pathname ?? null,
+      type,
       caption: caption?.trim() || null,
       uploaderName: resolvedName,
       guestId

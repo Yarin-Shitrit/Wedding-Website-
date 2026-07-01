@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 
 // ---- Types ----------------------------------------------------------------
 
-interface GuestPhoto {
+interface GalleryItem {
   id: string;
   url: string;
+  type: "image" | "video";
   caption: string | null;
   uploaderName: string | null;
 }
@@ -20,9 +22,48 @@ const ALLOWED_MIME = new Set([
   "image/png",
   "image/webp",
   "image/heic",
-  "image/heif"
+  "image/heif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm"
 ]);
-const MAX_BYTES = 15 * 1024 * 1024;
+const MAX_BYTES = 500 * 1024 * 1024;
+const MULTIPART_THRESHOLD = 8_000_000;
+const FILE_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm";
+
+// ---- Helpers --------------------------------------------------------------
+
+// Append the download flag Vercel Blob honors (Content-Disposition: attachment)
+// without clobbering any query string the URL may already carry.
+function downloadHrefFor(url: string): string {
+  return url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+}
+
+// Derive a sensible filename for a downloaded item — prefer the blob pathname
+// tail, fall back to `${id}.${ext}`.
+function filenameFor(item: GalleryItem): string {
+  try {
+    const tail = new URL(item.url).pathname.split("/").pop();
+    if (tail && tail.includes(".")) return decodeURIComponent(tail);
+  } catch {
+    // ignore malformed URLs — fall through to the id-based name.
+  }
+  const ext = item.type === "video" ? "mp4" : "jpg";
+  return `${item.id}.${ext}`;
+}
+
+// Force-trigger a download via a transient anchor click. The `download`
+// attribute plus `?download=1` (honored by Vercel Blob) yields a save.
+function triggerDownload(href: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  // Some browsers won't honor download without the anchor being in the DOM.
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 // ---- Component ------------------------------------------------------------
 
@@ -31,15 +72,23 @@ export function ShareClient({
   token,
   guestFirstName
 }: {
-  initialPhotos: GuestPhoto[];
+  initialPhotos: GalleryItem[];
   token: string | null;
   guestFirstName: string | null;
 }) {
-  const [photos, setPhotos] = useState<GuestPhoto[]>(initialPhotos);
+  const [photos, setPhotos] = useState<GalleryItem[]>(initialPhotos);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploaderName, setUploaderName] = useState(guestFirstName ?? "");
   const [caption, setCaption] = useState("");
+
+  // Selection + bulk-download state.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkLabel, setBulkLabel] = useState("");
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const openPicker = useCallback(() => {
@@ -59,32 +108,51 @@ export function ShareClient({
       setErrorMessage("");
 
       for (const file of files) {
+        setProgress(0);
+
         // Client-side preflight: skip files that fail validation.
         if (!ALLOWED_MIME.has(file.type)) {
-          setErrorMessage("פורמט לא נתמך — אפשר רק JPEG, PNG, WebP או HEIC.");
+          setErrorMessage(
+            "פורמט לא נתמך — אפשר רק תמונות (JPEG, PNG, WebP, HEIC) או וידאו (MP4, MOV, WebM)."
+          );
           setPhase("error");
           continue;
         }
         if (file.size > MAX_BYTES) {
-          setErrorMessage("הקובץ גדול מדי — עד ‎15MB לתמונה.");
+          setErrorMessage("הקובץ גדול מדי — עד ‎500MB לקובץ.");
           setPhase("error");
           continue;
         }
 
-        const fd = new FormData();
-        fd.append("file", file, file.name);
-        if (caption) fd.append("caption", caption);
-        if (uploaderName) fd.append("uploaderName", uploaderName);
-        if (token) fd.append("token", token);
-
         try {
+          // 1) Upload straight to Vercel Blob from the browser — bypasses the
+          //    ~4.5MB serverless body limit so large photos + videos work.
+          const blob = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/guest-photos/upload",
+            contentType: file.type,
+            multipart: file.size > MULTIPART_THRESHOLD,
+            clientPayload: JSON.stringify({ caption, uploaderName, token }),
+            onUploadProgress: (ev) => setProgress(Math.round(ev.percentage))
+          });
+
+          // 2) Record the DB row now that the file lives in Blob.
+          const kind = file.type.startsWith("video/") ? "video" : "image";
           const resp = await fetch("/api/guest-photos", {
             method: "POST",
-            body: fd
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              url: blob.url,
+              pathname: blob.pathname,
+              type: kind,
+              caption,
+              uploaderName,
+              token
+            })
           });
 
           if (!resp.ok) {
-            let msg = "לא הצלחנו להעלות את התמונה. נסו שוב בבקשה.";
+            let msg = "לא הצלחנו לשמור את הקובץ. נסו שוב בבקשה.";
             try {
               const data = (await resp.json()) as { error?: string };
               if (data?.error) msg = data.error;
@@ -96,7 +164,7 @@ export function ShareClient({
             continue;
           }
 
-          const record = (await resp.json()) as GuestPhoto;
+          const record = (await resp.json()) as GalleryItem;
           // Optimistic prepend — newest first.
           setPhotos((prev) => [record, ...prev]);
         } catch {
@@ -105,11 +173,100 @@ export function ShareClient({
         }
       }
 
+      setProgress(0);
       // Reset to idle if no error was raised during this batch.
       setPhase((prev) => (prev === "error" ? "error" : "idle"));
     },
     [caption, uploaderName, token]
   );
+
+  // -- Selection ------------------------------------------------------------
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((prev) => {
+      if (prev) setSelected(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleOne = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(photos.map((p) => p.id)));
+  }, [photos]);
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
+  // -- Bulk download --------------------------------------------------------
+
+  const sequentialDownload = useCallback(
+    async (items: GalleryItem[]) => {
+      if (items.length === 0 || bulkBusy) return;
+      setBulkBusy(true);
+      setBulkLabel("מוריד…");
+      try {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          triggerDownload(downloadHrefFor(item.url), filenameFor(item));
+          // Small gap so browsers don't drop the later clicks.
+          if (i < items.length - 1) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+      } finally {
+        setBulkBusy(false);
+        setBulkLabel("");
+      }
+    },
+    [bulkBusy]
+  );
+
+  const zipDownload = useCallback(
+    async (ids: string[]) => {
+      if (photos.length === 0 || bulkBusy) return;
+      setBulkBusy(true);
+      setBulkLabel("מכינים ZIP…");
+      try {
+        const resp = await fetch("/api/guest-photos/zip", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ids })
+        });
+        if (!resp.ok) {
+          setErrorMessage("לא הצלחנו להכין קובץ ZIP. נסו שוב בבקשה.");
+          setPhase("error");
+          return;
+        }
+        const blob = await resp.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        triggerDownload(objectUrl, "wedding-gallery.zip");
+        // Release the object URL after the click has been dispatched.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+      } catch {
+        setErrorMessage("לא הצלחנו להכין קובץ ZIP. בדקו את החיבור ונסו שוב.");
+        setPhase("error");
+      } finally {
+        setBulkBusy(false);
+        setBulkLabel("");
+      }
+    },
+    [photos.length, bulkBusy]
+  );
+
+  const selectedItems = useMemo(
+    () => photos.filter((p) => selected.has(p.id)),
+    [photos, selected]
+  );
+  const hasSelection = selectMode && selected.size > 0;
 
   return (
     <div>
@@ -129,7 +286,7 @@ export function ShareClient({
             maxWidth: 360
           }}
         >
-          העלו תמונות מהאירוע כדי שכולם ייהנו מהן
+          העלו תמונות וסרטונים מהאירוע כדי שכולם ייהנו מהם
         </p>
       </div>
 
@@ -137,7 +294,7 @@ export function ShareClient({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        accept={FILE_ACCEPT}
         multiple
         onChange={onFiles}
         style={{ display: "none" }}
@@ -158,7 +315,7 @@ export function ShareClient({
           type="text"
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
-          placeholder="כיתוב לתמונה (לא חובה)"
+          placeholder="כיתוב לקובץ (לא חובה)"
           style={{ marginBottom: 16 }}
         />
 
@@ -177,10 +334,10 @@ export function ShareClient({
             disabled={phase === "uploading"}
             style={primaryBtn}
           >
-            שתפו את התמונות שלכם
+            שתפו תמונות וסרטונים
           </button>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-            JPEG · PNG · WebP · HEIC · עד ‎15MB
+            תמונות ווידאו · עד ‎500MB
           </div>
 
           {phase === "uploading" && (
@@ -193,7 +350,7 @@ export function ShareClient({
               }}
             >
               <div style={spinnerStyle} aria-hidden="true" />
-              <span>מעלה…</span>
+              <span>מעלה… {progress}%</span>
             </div>
           )}
 
@@ -209,20 +366,115 @@ export function ShareClient({
       <div style={{ marginTop: 28 }}>
         {photos.length === 0 ? (
           <div style={emptyStyle}>
-            <p style={emptyBody}>עדיין אין תמונות — היו הראשונים לשתף!</p>
+            <p style={emptyBody}>עדיין אין תמונות או סרטונים — היו הראשונים לשתף!</p>
           </div>
         ) : (
           <>
-            <h2
+            {/* Toolbar: title + selection controls */}
+            <div
               style={{
-                fontSize: 18,
-                fontWeight: 600,
-                margin: "0 0 16px",
-                color: "var(--ink)"
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 14
               }}
             >
-              התמונות של האורחים
-            </h2>
+              <h2
+                style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  margin: 0,
+                  color: "var(--ink)"
+                }}
+              >
+                הגלריה של האורחים
+              </h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" onClick={toggleSelectMode} style={secondaryBtn}>
+                  {selectMode ? "ביטול בחירה" : "בחירה"}
+                </button>
+                {selectMode && (
+                  <>
+                    <button type="button" onClick={selectAll} style={secondaryBtn}>
+                      בחר הכול
+                    </button>
+                    <button type="button" onClick={clearSelection} style={secondaryBtn}>
+                      נקה
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Bulk action bar */}
+            <div style={actionBarStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={scopeLabelStyle}>הורדת הכול</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => sequentialDownload(photos)}
+                    disabled={bulkBusy}
+                    style={groupBtn}
+                  >
+                    הורדה בודדת
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => zipDownload(photos.map((p) => p.id))}
+                    disabled={bulkBusy}
+                    style={groupBtn}
+                  >
+                    ZIP
+                  </button>
+                </div>
+              </div>
+
+              {hasSelection && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={scopeLabelStyle}>
+                    הורדת הנבחרים ({selected.size})
+                  </span>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => sequentialDownload(selectedItems)}
+                      disabled={bulkBusy}
+                      style={groupBtn}
+                    >
+                      הורדה בודדת
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => zipDownload(selectedItems.map((p) => p.id))}
+                      disabled={bulkBusy}
+                      style={groupBtn}
+                    >
+                      ZIP
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {bulkBusy && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    color: "var(--ink-3)",
+                    fontSize: 13
+                  }}
+                >
+                  <div style={spinnerStyle} aria-hidden="true" />
+                  <span>{bulkLabel || "מוריד…"}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Grid */}
             <div
               style={{
                 display: "grid",
@@ -230,27 +482,87 @@ export function ShareClient({
                 gap: 10
               }}
             >
-              {photos.map((photo) => (
-                <div key={photo.id} style={tileStyle}>
-                  <div style={{ aspectRatio: "1 / 1", overflow: "hidden" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.caption ?? ""}
-                      loading="lazy"
+              {photos.map((photo) => {
+                const isSelected = selected.has(photo.id);
+                return (
+                  <div
+                    key={photo.id}
+                    style={{
+                      ...tileStyle,
+                      ...(selectMode && isSelected ? tileSelectedStyle : null)
+                    }}
+                  >
+                    <div
                       style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        display: "block"
+                        position: "relative",
+                        aspectRatio: "1 / 1",
+                        overflow: "hidden",
+                        cursor: selectMode ? "pointer" : "default"
                       }}
-                    />
+                      onClick={selectMode ? () => toggleOne(photo.id) : undefined}
+                    >
+                      {photo.type === "video" ? (
+                        <video
+                          src={photo.url}
+                          controls={!selectMode}
+                          playsInline
+                          preload="metadata"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block"
+                          }}
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={photo.url}
+                          alt={photo.caption ?? ""}
+                          loading="lazy"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block"
+                          }}
+                        />
+                      )}
+
+                      {/* Selection checkbox (top corner) */}
+                      {selectMode && (
+                        <span
+                          style={{
+                            ...checkboxStyle,
+                            ...(isSelected ? checkboxCheckedStyle : null)
+                          }}
+                          aria-hidden="true"
+                        >
+                          {isSelected ? "✓" : ""}
+                        </span>
+                      )}
+
+                      {/* Per-item download (top corner, opposite the checkbox) */}
+                      {!selectMode && (
+                        <a
+                          href={downloadHrefFor(photo.url)}
+                          download={filenameFor(photo)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="הורדה"
+                          title="הורדה"
+                          style={tileDlBtn}
+                        >
+                          ↓
+                        </a>
+                      )}
+                    </div>
+
+                    {photo.uploaderName && (
+                      <span style={attributionStyle}>{photo.uploaderName}</span>
+                    )}
                   </div>
-                  {photo.uploaderName && (
-                    <span style={attributionStyle}>{photo.uploaderName}</span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -273,6 +585,29 @@ const primaryBtn: React.CSSProperties = {
   fontFamily: "inherit"
 };
 
+const secondaryBtn: React.CSSProperties = {
+  background: "transparent",
+  color: "var(--ink-2)",
+  border: "1px solid var(--hair-strong)",
+  borderRadius: 9999,
+  padding: "8px 16px",
+  fontSize: 13,
+  cursor: "pointer",
+  fontFamily: "inherit"
+};
+
+const groupBtn: React.CSSProperties = {
+  background: "var(--accent)",
+  color: "var(--ivory)",
+  border: 0,
+  borderRadius: 9999,
+  padding: "9px 18px",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+  fontFamily: "inherit"
+};
+
 const spinnerStyle: React.CSSProperties = {
   width: 20,
   height: 20,
@@ -287,6 +622,24 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid var(--hair-strong)",
   borderRadius: 12,
   padding: 16
+};
+
+const actionBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+  gap: 20,
+  flexWrap: "wrap",
+  background: "var(--ivory)",
+  border: "1px solid var(--hair-strong)",
+  borderRadius: 12,
+  padding: "12px 16px",
+  marginBottom: 16
+};
+
+const scopeLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--ink-2)"
 };
 
 const emptyStyle: React.CSSProperties = {
@@ -311,6 +664,53 @@ const tileStyle: React.CSSProperties = {
   overflow: "hidden",
   border: "1px solid var(--hair-strong)",
   background: "var(--paper)"
+};
+
+const tileSelectedStyle: React.CSSProperties = {
+  borderColor: "var(--accent)",
+  boxShadow: "0 0 0 2px var(--accent)"
+};
+
+const checkboxStyle: React.CSSProperties = {
+  position: "absolute",
+  insetInlineStart: 8,
+  top: 8,
+  width: 24,
+  height: 24,
+  borderRadius: "50%",
+  border: "2px solid #fff",
+  background: "rgba(15, 23, 42, 0.45)",
+  color: "#fff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 14,
+  fontWeight: 700,
+  lineHeight: 1
+};
+
+const checkboxCheckedStyle: React.CSSProperties = {
+  background: "var(--accent)",
+  borderColor: "var(--accent)"
+};
+
+const tileDlBtn: React.CSSProperties = {
+  position: "absolute",
+  insetInlineEnd: 8,
+  top: 8,
+  width: 30,
+  height: 30,
+  borderRadius: "50%",
+  background: "rgba(15, 23, 42, 0.55)",
+  color: "#fff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 16,
+  fontWeight: 700,
+  textDecoration: "none",
+  lineHeight: 1,
+  fontFamily: "inherit"
 };
 
 const attributionStyle: React.CSSProperties = {

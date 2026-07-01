@@ -103,6 +103,8 @@ model GalleryItem {
 model GuestPhoto {
   id           String   @id @default(cuid())
   url          String   // Vercel Blob public URL
+  pathname     String?  // Blob pathname — used by del() when the couple moderates
+  type         String   @default("image") // "image" | "video" (validated at app layer)
   caption      String?
   uploaderName String?
   guestId      String?  // resolved from rsvpToken when present

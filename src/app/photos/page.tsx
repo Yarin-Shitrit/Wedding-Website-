@@ -6,5 +6,5 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default function PhotosPage() {
-  redirect("/share");
+  redirect("/");
 }
