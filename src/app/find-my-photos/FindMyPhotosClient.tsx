@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -11,6 +11,12 @@ interface MatchedItem {
   caption: string | null;
   uploaderName: string | null;
   distance: number;
+}
+
+interface Person {
+  clusterId: number;
+  size: number;
+  faceUrl: string; // Next image-proxy path for the representative face crop
 }
 
 type Phase = "idle" | "uploading" | "no-face" | "no-matches" | "results" | "error";
@@ -93,6 +99,11 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
   const [items, setItems] = useState<MatchedItem[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Browse-by-face: the clustered "people" grid + whether the current results
+  // came from tapping a face (vs. a selfie upload) so the heading can differ.
+  const [people, setPeople] = useState<Person[]>([]);
+  const [personView, setPersonView] = useState(false);
+
   // Selection + bulk download.
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -114,6 +125,50 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
     setErrorMessage("");
     setSelectMode(false);
     setSelected(new Set());
+    setPersonView(false);
+  }, []);
+
+  // Load the clustered people once on mount; silently no-op if unavailable
+  // (SnapFinder down / not yet clustered) so the selfie flow still works.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const resp = await fetch("/api/people");
+        if (!resp.ok) return;
+        const data = (await resp.json()) as { people: Person[] };
+        if (alive) setPeople(data.people ?? []);
+      } catch {
+        // ignore — face grid just won't render
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Tap a face → load every photo that person appears in, reusing the results view.
+  const openPerson = useCallback(async (clusterId: number) => {
+    setPersonView(true);
+    setPhase("uploading");
+    setErrorMessage("");
+    setItems([]);
+    setSelected(new Set());
+    setSelectMode(false);
+    try {
+      const resp = await fetch(`/api/people/${clusterId}/photos`);
+      if (!resp.ok) {
+        setErrorMessage("נתקלנו בתקלה בטעינת התמונות. נסו שוב בבקשה.");
+        setPhase("error");
+        return;
+      }
+      const data = (await resp.json()) as { items: MatchedItem[] };
+      setItems(data.items);
+      setPhase(data.items.length === 0 ? "no-matches" : "results");
+    } catch {
+      setErrorMessage("לא הצלחנו להגיע לשרת. בדקו את החיבור ונסו שוב.");
+      setPhase("error");
+    }
   }, []);
 
   const onFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,6 +187,7 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
     setItems([]);
     setSelected(new Set());
     setSelectMode(false);
+    setPersonView(false);
 
     try {
       const selfie = await downscaleSelfie(file);
@@ -326,7 +382,13 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
     <div>
       <div style={resultsHeader}>
         <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>
-          {items.length === 1 ? "מצאנו תמונה אחת שלכם" : `מצאנו ${items.length} תמונות שלכם`}
+          {personView
+            ? items.length === 1
+              ? "תמונה אחת עם האורח/ת"
+              : `${items.length} תמונות עם האורח/ת`
+            : items.length === 1
+              ? "מצאנו תמונה אחת שלכם"
+              : `מצאנו ${items.length} תמונות שלכם`}
         </h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" onClick={toggleSelectMode} style={secondaryBtn}>
@@ -477,6 +539,42 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
     </div>
   );
 
+  const renderBrowseByFace = () => {
+    if (people.length === 0) return null;
+    return (
+      <div style={{ marginTop: 26 }}>
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <div className="eyebrow">או — עיינו לפי פרצוף</div>
+          <p
+            style={{
+              fontSize: 12.5,
+              color: "var(--ink-3)",
+              margin: "8px auto 0",
+              maxWidth: 320
+            }}
+          >
+            בחרו פרצוף כדי לראות את כל התמונות שבהן הוא מופיע
+          </p>
+        </div>
+        <div style={facesGrid}>
+          {people.map((p) => (
+            <button
+              key={p.clusterId}
+              type="button"
+              onClick={() => openPerson(p.clusterId)}
+              style={faceTile}
+              title={`${p.size} תמונות`}
+              aria-label={`הצג ${p.size} תמונות של האורח/ת`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.faceUrl} alt="" loading="lazy" style={faceImg} />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Header */}
@@ -509,11 +607,40 @@ export function FindMyPhotosClient({ guestFirstName }: { guestFirstName: string 
         {phase === "error" && renderError()}
         {phase === "results" && renderResults()}
       </div>
+
+      {/* Browse by face — hidden while a selfie search or a result set is active. */}
+      {phase !== "uploading" && phase !== "results" && renderBrowseByFace()}
     </div>
   );
 }
 
 // ---- Inline styles (shared vocabulary with ShareClient) -------------------
+
+const facesGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
+  gap: 12,
+  justifyItems: "center"
+};
+
+const faceTile: React.CSSProperties = {
+  border: "2px solid var(--hair)",
+  padding: 0,
+  background: "var(--ivory-2)",
+  cursor: "pointer",
+  width: 72,
+  height: 72,
+  borderRadius: "50%",
+  overflow: "hidden",
+  boxShadow: "var(--shadow)"
+};
+
+const faceImg: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block"
+};
 
 const primaryBtn: React.CSSProperties = {
   background: "var(--accent)",

@@ -170,3 +170,75 @@ export async function matchSelfies(files: File[]): Promise<MatchOutcome> {
   const data = (await resp.json()) as MatchResponse;
   return { ok: true, data };
 }
+
+// ---- Browse-by-face (people clustering) -----------------------------------
+
+export interface Person {
+  cluster_id: number;
+  size: number;
+  representative_face_id: string;
+}
+
+/** List the clustered people for the event (biggest cluster first). */
+export async function listPeople(): Promise<Person[]> {
+  const cfg = getSnapfinderConfig();
+  if (!cfg) return [];
+  const token = await issueEventToken(cfg);
+  const resp = await fetch(`${cfg.apiUrl}/events/${cfg.eventId}/people`, {
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+  if (!resp.ok) throw new Error(`snapfinder people failed: ${resp.status}`);
+  return (await resp.json()) as Person[];
+}
+
+/**
+ * Every photo a given person (cluster) appears in. Returns the MatchedPhoto
+ * shape (best_distance/faces zeroed) so callers reuse the match URL→gallery map.
+ */
+export async function getPersonPhotos(clusterId: number): Promise<MatchedPhoto[]> {
+  const cfg = getSnapfinderConfig();
+  if (!cfg) return [];
+  const token = await issueEventToken(cfg);
+  const resp = await fetch(
+    `${cfg.apiUrl}/events/${cfg.eventId}/people/${clusterId}/photos`,
+    { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+  );
+  if (!resp.ok) throw new Error(`snapfinder person photos failed: ${resp.status}`);
+  const rows = (await resp.json()) as { photo_id: string; full_url: string }[];
+  return rows.map((r) => ({
+    photo_id: r.photo_id,
+    best_distance: 0,
+    faces: [],
+    thumb_url: null,
+    full_url: r.full_url
+  }));
+}
+
+/** Fetch a representative face crop (JPEG bytes) — proxied so the token stays server-side. */
+export async function getFaceCrop(
+  faceId: string
+): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+  const cfg = getSnapfinderConfig();
+  if (!cfg) return null;
+  const token = await issueEventToken(cfg);
+  const resp = await fetch(
+    `${cfg.apiUrl}/events/${cfg.eventId}/faces/${faceId}/crop`,
+    { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+  );
+  if (!resp.ok) return null;
+  const body = await resp.arrayBuffer();
+  return { body, contentType: resp.headers.get("content-type") || "image/jpeg" };
+}
+
+/** Enqueue a (re)clustering pass over the event's faces. Best-effort. */
+export async function triggerClustering(): Promise<void> {
+  const cfg = getSnapfinderConfig();
+  if (!cfg) return;
+  const token = await issueEventToken(cfg);
+  await fetch(`${cfg.apiUrl}/events/${cfg.eventId}/cluster`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+}
