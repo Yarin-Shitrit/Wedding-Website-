@@ -13,7 +13,8 @@ const HOME_ANCHORS: { href: string; label: string }[] = [
 ];
 
 const PAGE_LINKS: { href: string; label: string }[] = [
-  { href: "/", label: "הגלריה" }
+  { href: "/", label: "הגלריה" },
+  { href: "/find-my-photos", label: "התמונות שלי" }
 ];
 
 export function SiteNav() {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { deleteByUrl } from "@/lib/snapfinder";
 
 // Admin-gated moderation: delete a guest-submitted photo/video. Removes the
 // underlying Blob object and the DB row. Auth pattern mirrors
@@ -31,6 +32,14 @@ export async function DELETE(
     await del(row.url);
   } catch (err) {
     console.error("guest-photos: blob delete failed", err);
+  }
+
+  // Best-effort: drop it from the face index too so it stops surfacing in
+  // /find-my-photos matches. Never block the moderation delete on this.
+  try {
+    await deleteByUrl(row.url);
+  } catch (err) {
+    console.error("guest-photos: snapfinder delete failed", err);
   }
 
   await prisma.guestPhoto.delete({ where: { id } });

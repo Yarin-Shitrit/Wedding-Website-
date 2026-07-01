@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ingestUrls } from "@/lib/snapfinder";
 import { z } from "zod";
 
 // Public, un-authed guest photo/video gallery. In the gallery-first flow the
@@ -78,6 +79,17 @@ export async function POST(req: NextRequest) {
       guestId
     }
   });
+
+  // Best-effort: register images with the face-recognition index so guests can
+  // later find themselves via /find-my-photos. Videos aren't face-indexed. A
+  // failure here (FR service down/unconfigured) must never fail the upload.
+  if (type === "image") {
+    try {
+      await ingestUrls([record.url]);
+    } catch (err) {
+      console.error("guest-photos: snapfinder ingest failed", err);
+    }
+  }
 
   return NextResponse.json(record, { status: 201 });
 }
