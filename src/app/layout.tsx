@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "אילי וירין · 15.10.2026",
-  description: "הזמנה לחתונה — אישור הגעה ופרטי האירוע"
+  title: "החתונה של אביב והדר-אור אוחנה · 25.6.2026",
+  description: "גלריית התמונות מהחתונה — שתפו והורידו את הרגעים מהאירוע"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

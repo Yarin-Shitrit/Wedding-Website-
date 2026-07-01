@@ -11,6 +11,7 @@ import { RsvpCta } from "@/components/sections/RsvpCta";
 import { Footer } from "@/components/sections/Footer";
 import { SectionDots } from "@/components/sections/SectionDots";
 import { getSettings } from "@/lib/settings";
+import { formatHebrewDate } from "@/lib/date";
 import {
   getMoments,
   getGalleryItems,
@@ -19,28 +20,6 @@ import {
 } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
-
-const HE_DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
-const HE_MONTHS = [
-  "ינואר",
-  "פברואר",
-  "מרץ",
-  "אפריל",
-  "מאי",
-  "יוני",
-  "יולי",
-  "אוגוסט",
-  "ספטמבר",
-  "אוקטובר",
-  "נובמבר",
-  "דצמבר"
-];
-
-function formatHebrewDate(d: Date) {
-  const day = HE_DAYS[d.getDay()];
-  const month = HE_MONTHS[d.getMonth()];
-  return `יום ${day} · ${d.getDate()} ב${month} ${d.getFullYear()}`;
-}
 
 export default async function CelebrationPage() {
   const [settings, moments, gallery, schedule, faq] = await Promise.all([

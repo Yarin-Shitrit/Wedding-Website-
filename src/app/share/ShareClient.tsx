@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
+import { PhotoMarquee } from "@/components/PhotoMarquee";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -93,11 +94,15 @@ function triggerDownload(href: string, filename: string): void {
 export function ShareClient({
   initialPhotos,
   token,
-  guestFirstName
+  guestFirstName,
+  coupleName,
+  dateLabel
 }: {
   initialPhotos: GalleryItem[];
   token: string | null;
   guestFirstName: string | null;
+  coupleName: string;
+  dateLabel: string;
 }) {
   const [photos, setPhotos] = useState<GalleryItem[]>(initialPhotos);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -319,9 +324,9 @@ export function ShareClient({
     <div>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 22 }}>
-        <div className="eyebrow">גלריית האורחים</div>
+        <div className="eyebrow">{dateLabel}</div>
         <h1 className="display" style={{ fontSize: 34, margin: "10px 0 6px" }}>
-          {guestFirstName ? `שלום ${guestFirstName}` : "שתפו את הרגעים שלכם"}
+          החתונה של {coupleName}
         </h1>
         <div className="ornament">· · ·</div>
         <p
@@ -333,7 +338,9 @@ export function ShareClient({
             maxWidth: 360
           }}
         >
-          העלו תמונות וסרטונים מהאירוע כדי שכולם ייהנו מהם
+          {guestFirstName
+            ? `שלום ${guestFirstName}, העלו את התמונות והסרטונים שלכם כדי שכולם ייהנו מהם`
+            : "העלו תמונות וסרטונים מהאירוע כדי שכולם ייהנו מהם"}
         </p>
       </div>
 
@@ -614,6 +621,20 @@ export function ShareClient({
           </>
         )}
       </div>
+
+      {/* Infinite auto-scrolling strip of the uploaded photos (images only). */}
+      {photos.some((p) => p.type === "image") && (
+        <div style={{ marginTop: 44 }}>
+          <div className="eyebrow" style={{ textAlign: "center" }}>
+            רגעים מהחתונה
+          </div>
+          <PhotoMarquee
+            images={photos
+              .filter((p) => p.type === "image")
+              .map((p) => ({ url: p.url, caption: p.caption }))}
+          />
+        </div>
+      )}
     </div>
   );
 }

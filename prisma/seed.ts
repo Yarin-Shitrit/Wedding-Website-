@@ -8,14 +8,14 @@ async function main() {
     update: {},
     create: {
       id: "singleton",
-      brideName: "אילי",
-      groomName: "ירין",
-      weddingDate: new Date("2026-10-15T19:00:00+03:00"),
+      brideName: "אביב",
+      groomName: "הדר-אור אוחנה",
+      weddingDate: new Date("2026-06-25T19:00:00+03:00"),
       venueName: "אולמי השדרה",
       venueAddress: "דרך השדרות 12, רעננה",
       venueMapUrl: "https://www.google.com/maps/search/?api=1&query=דרך+השדרות+12+רעננה",
       parkingInfo:
-        "חניון תת־קרקעי, חינם למוזמנים. כניסה מדרך השדרות. בקשו אישור בכניסה — \"לחתונת אילי וירין\".",
+        "חניון תת־קרקעי, חינם למוזמנים. כניסה מדרך השדרות. בקשו אישור בכניסה — \"לחתונת אביב והדר-אור אוחנה\".",
       shuttleInfo:
         "שני אוטובוסים יוצאים מתחנת ארלוזורוב ב-18:15 ו-19:00. חזרה ב-00:30 ו-02:00.",
       dressCode:
@@ -24,7 +24,7 @@ async function main() {
       storyTitle: "הסיפור שלנו",
       storyEyebrow: "פרק ראשון",
       storyBody:
-        "נפגשנו בקפיטריה של הפקולטה למדעי המחשב, בערב חורפי אחד שבו לאף אחד מאיתנו לא היה שום תכנון להישאר. ירין הזמין קפה. אילי קראה ספר. שיחה אחת על מוזיקה הפכה לעוד אחת על תכנונים לעתיד, ועד שסגרו את המקום בחצות — כבר ידענו ששנינו לא הולכים לאף מקום בלי השני.",
+        "נפגשנו בקפיטריה של הפקולטה למדעי המחשב, בערב חורפי אחד שבו לאף אחד מאיתנו לא היה שום תכנון להישאר. הדר-אור הזמין קפה. אביב קראה ספר. שיחה אחת על מוזיקה הפכה לעוד אחת על תכנונים לעתיד, ועד שסגרו את המקום בחצות — כבר ידענו ששנינו לא הולכים לאף מקום בלי השני.",
       storyQuote: "ובלילה ההוא חזרנו ברגל הביתה.",
       heroLayout: "centered",
       palette: "terracotta",
@@ -155,12 +155,12 @@ async function main() {
   const tableA = await prisma.table.upsert({
     where: { name: "שולחן 1" },
     update: {},
-    create: { name: "שולחן 1", capacity: 10, notes: "משפחת אילי" }
+    create: { name: "שולחן 1", capacity: 10, notes: "משפחת אביב" }
   });
   const tableB = await prisma.table.upsert({
     where: { name: "שולחן 2" },
     update: {},
-    create: { name: "שולחן 2", capacity: 10, notes: "משפחת ירין" }
+    create: { name: "שולחן 2", capacity: 10, notes: "משפחת אוחנה" }
   });
 
   await prisma.guest.upsert({

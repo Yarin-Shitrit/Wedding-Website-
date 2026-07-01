@@ -1,5 +1,7 @@
 import { SiteNav } from "@/components/SiteNav";
 import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
+import { formatHebrewDateShort } from "@/lib/date";
 import { ShareClient } from "./share/ShareClient";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +22,13 @@ export default async function HomePage({
     if (g) firstName = g.firstName;
   }
 
-  const photos = await prisma.guestPhoto.findMany({
-    orderBy: { createdAt: "desc" }
-  });
+  const [photos, settings] = await Promise.all([
+    prisma.guestPhoto.findMany({ orderBy: { createdAt: "desc" } }),
+    getSettings()
+  ]);
+
+  const coupleName = `${settings.brideName} ו${settings.groomName}`;
+  const dateLabel = formatHebrewDateShort(new Date(settings.weddingDate));
 
   return (
     <>
@@ -46,6 +52,8 @@ export default async function HomePage({
           }))}
           token={searchParams.token ?? null}
           guestFirstName={firstName}
+          coupleName={coupleName}
+          dateLabel={dateLabel}
         />
       </main>
     </>
