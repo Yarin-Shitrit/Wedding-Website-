@@ -16,13 +16,17 @@ export const dynamic = "force-dynamic";
 const BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
 
 // New POST contract: metadata recorded AFTER the client-upload resolves.
+// Optional fields use .nullish() (accepts null AND undefined): the client
+// serializes absent values as JSON `null` — e.g. the homepage sends
+// `token: null` when there's no ?token= link — and z.string().optional()
+// would reject null, 400ing every un-tokened upload.
 const RecordBody = z.object({
   url: z.string().url(),
-  pathname: z.string().optional(),
+  pathname: z.string().nullish(),
   type: z.enum(["image", "video"]),
-  caption: z.string().trim().max(140).optional(),
-  uploaderName: z.string().trim().max(60).optional(),
-  token: z.string().trim().optional()
+  caption: z.string().trim().max(140).nullish(),
+  uploaderName: z.string().trim().max(60).nullish(),
+  token: z.string().trim().nullish()
 });
 
 export async function POST(req: NextRequest) {

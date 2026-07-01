@@ -154,8 +154,12 @@ export function ShareClient({
           if (!resp.ok) {
             let msg = "לא הצלחנו לשמור את הקובץ. נסו שוב בבקשה.";
             try {
-              const data = (await resp.json()) as { error?: string };
-              if (data?.error) msg = data.error;
+              const data = (await resp.json()) as { error?: unknown };
+              // Only surface string errors. The record route can return a
+              // structured Zod error object ({formErrors, fieldErrors}); setting
+              // that as errorMessage and rendering it as a React child throws
+              // (Minified React error #31) and crashes the whole page.
+              if (typeof data?.error === "string") msg = data.error;
             } catch {
               // ignore non-JSON error bodies
             }
