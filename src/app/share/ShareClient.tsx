@@ -34,6 +34,29 @@ const FILE_ACCEPT =
 
 // ---- Helpers --------------------------------------------------------------
 
+// iPhones shoot HEIC by default. HEIC is NOT renderable in <img> on any
+// non-Apple browser (Chrome/Firefox/Edge/Android), so a HEIC stored as-is
+// shows a broken-image icon for most guests. Detect it by MIME type OR by
+// filename extension — some browsers report an empty `type` for HEIC files.
+function isHeic(file: File): boolean {
+  const t = file.type.toLowerCase();
+  if (t === "image/heic" || t === "image/heif") return true;
+  const name = file.name.toLowerCase();
+  return name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+// Convert a HEIC/HEIF file to a JPEG File in the browser so what lands in Blob
+// is universally viewable + downloadable. heic2any wraps libheif (WASM, ~1.3MB)
+// and is dynamically imported so the cost is only paid when a HEIC is picked.
+async function convertHeicToJpeg(file: File): Promise<File> {
+  const heic2any = (await import("heic2any")).default;
+  const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+  // Multi-image HEIC (e.g. Live Photos / bursts) yields an array — take the first.
+  const blob = Array.isArray(out) ? out[0] : out;
+  const base = file.name.replace(/\.(heic|heif)$/i, "") || "photo";
+  return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+}
+
 // Append the download flag Vercel Blob honors (Content-Disposition: attachment)
 // without clobbering any query string the URL may already carry.
 function downloadHrefFor(url: string): string {
@@ -79,6 +102,7 @@ export function ShareClient({
   const [photos, setPhotos] = useState<GalleryItem[]>(initialPhotos);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
+  const [converting, setConverting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploaderName, setUploaderName] = useState(guestFirstName ?? "");
   const [caption, setCaption] = useState("");
@@ -107,8 +131,27 @@ export function ShareClient({
       setPhase("uploading");
       setErrorMessage("");
 
-      for (const file of files) {
+      for (const rawFile of files) {
         setProgress(0);
+
+        // Transcode HEIC/HEIF → JPEG up front so it renders everywhere. Must run
+        // BEFORE the MIME check: some browsers report an empty `type` for HEIC,
+        // which would otherwise be rejected as "unsupported format".
+        let file = rawFile;
+        if (isHeic(rawFile)) {
+          setConverting(true);
+          try {
+            file = await convertHeicToJpeg(rawFile);
+          } catch {
+            setErrorMessage(
+              "לא הצלחנו להמיר תמונת HEIC. נסו לצלם במצב 'תואם ביותר' או להעלות JPEG."
+            );
+            setPhase("error");
+            setConverting(false);
+            continue;
+          }
+          setConverting(false);
+        }
 
         // Client-side preflight: skip files that fail validation.
         if (!ALLOWED_MIME.has(file.type)) {
@@ -354,7 +397,7 @@ export function ShareClient({
               }}
             >
               <div style={spinnerStyle} aria-hidden="true" />
-              <span>מעלה… {progress}%</span>
+              <span>{converting ? "ממיר תמונה…" : `מעלה… ${progress}%`}</span>
             </div>
           )}
 
